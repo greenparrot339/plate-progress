@@ -96,10 +96,17 @@
   .empty svg{width:34px;height:34px;stroke:var(--text-faint);fill:none;stroke-width:1.3;margin-bottom:10px;}
   .empty p{font-size:13px;line-height:1.5;margin:0 0 14px;}
 
-  .exercise-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);}
+  .exercise-list{position:relative;}
+  .exercise-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);
+    touch-action:pan-y;user-select:none;-webkit-user-select:none;position:relative;background:var(--surface);}
   .exercise-row:last-child{border-bottom:none;}
+  .exercise-row .grip{flex-shrink:0;display:flex;flex-direction:column;gap:3px;padding:4px 2px;color:var(--text-faint);}
+  .exercise-row .grip span{width:3px;height:3px;border-radius:50%;background:currentColor;box-shadow:7px 0 0 currentColor;}
+  .exercise-row .exname{flex:1;min-width:0;}
   .exercise-row .name{font-size:15px;font-weight:500;}
   .exercise-row .meta{font-size:11.5px;color:var(--text-faint);margin-top:2px;}
+  .exercise-row.dragging{box-shadow:0 6px 18px rgba(0,0,0,0.45);border-radius:8px;border-bottom-color:transparent;opacity:0.97;}
+  .exercise-row.press-armed{background:var(--surface2);border-radius:8px;}
 
   .day-chip{padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);
     font-family:var(--font-display);font-size:13px;letter-spacing:0.03em;text-transform:uppercase;color:var(--text-dim);
@@ -107,8 +114,24 @@
   .day-chip.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
   .day-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px;}
 
+  .log-date-bar{display:flex;align-items:center;gap:6px;margin:-4px 0 14px;}
+  .log-date-bar .ldb-label{font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;}
+  .log-date-bar input[type=date]{width:auto;background:none;border:none;color:var(--accent);
+    font-family:var(--font-mono);font-size:12.5px;font-weight:600;padding:2px 2px;}
+  .log-date-bar input[type=date]:focus{outline:none;}
+  .log-date-bar input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.6);padding:2px;margin-left:2px;}
+  .log-date-today{background:none;border:none;color:var(--text-faint);font-size:11px;padding:2px 6px;
+    border-radius:20px;border:1px solid var(--border);font-family:var(--font-body);}
+
+  .split-switch-bar{display:flex;align-items:center;gap:6px;margin:-4px 0 14px;}
+  .split-switch-bar select{width:auto;max-width:60%;background:none;border:none;color:var(--accent);
+    font-family:var(--font-body);font-size:13px;font-weight:600;padding:2px 2px;}
+  .split-switch-bar select:focus{outline:none;}
+  .split-active-tag{font-size:11px;color:var(--good);white-space:nowrap;}
+
   .set-log-row{display:grid;grid-template-columns:34px 1fr 1fr auto;gap:10px;align-items:center;
-    padding:10px 0;border-bottom:1px solid var(--border);}
+    padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;}
+  .set-log-row:active{background:var(--surface2);border-radius:8px;}
   .set-log-row:last-child{border-bottom:none;}
   .set-log-row .setnum{font-family:var(--font-mono);font-size:12px;color:var(--text-faint);background:var(--surface2);
     border-radius:6px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;}
@@ -160,7 +183,7 @@
       <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
     </button>
   </div>
-  <div class="plate-rule"><div class="line"></div><div class="dot hot"></div><div class="dot"></div><div class="dot"></div><div class="line"></div></div>
+  <div class="plate-rule"><div class="line"></div><div class="dot" data-dot="0"></div><div class="dot" data-dot="1"></div><div class="dot" data-dot="2"></div><div class="line"></div></div>
 </div>
 
 <main id="main"></main>
@@ -186,7 +209,7 @@
 <script>
 /* ============ STATE ============ */
 let DB = { splits: [], exercises: [], sets: [] };
-let state = { tab:'log', logDayId:null, logExerciseId:null, splitEditId:null, progressSplitId:null, progressExerciseId:null, progressMetric:'weight' };
+let state = { tab:'log', logDayId:null, logExerciseId:null, logDate:null, splitEditId:null, splitViewId:null, progressSplitId:null, progressExerciseId:null, progressMetric:'weight' };
 let charts = {};
 const $main = document.getElementById('main');
 const $modalRoot = document.getElementById('modal-root');
@@ -229,7 +252,22 @@ async function loadAll(){
     await openDB();
     const [s,e,st]=await Promise.all([idbGet('splits'),idbGet('exercises'),idbGet('sets')]);
     DB.splits=s||[]; DB.exercises=e||[]; DB.sets=st||[];
+    ensureExerciseOrder();
   }catch(err){ console.error('IndexedDB load failed',err); DB={splits:[],exercises:[],sets:[]}; toast('Could not open local storage'); }
+}
+// One-time migration: give any exercise missing an `order` a sequential value within its day,
+// so existing splits (created before drag-reorder existed) sort predictably.
+function ensureExerciseOrder(){
+  const nextByDay = {};
+  DB.exercises.forEach(ex=>{
+    if(typeof ex.order !== 'number'){
+      const n = nextByDay[ex.dayId] ?? 0;
+      ex.order = n;
+      nextByDay[ex.dayId] = n+1;
+    } else {
+      nextByDay[ex.dayId] = Math.max(nextByDay[ex.dayId] ?? -1, ex.order+1);
+    }
+  });
 }
 async function save(key){
   try{ await idbSet(key,DB[key]); }
@@ -263,8 +301,8 @@ function registerPWA(){
 function activeSplit(){ return DB.splits.find(s=>!s.archivedAt); }
 function splitById(id){ return DB.splits.find(s=>s.id===id); }
 function daysOf(split){ return split ? split.days : []; }
-function exercisesOfDay(dayId){ return DB.exercises.filter(e=>e.dayId===dayId && !e.archived); }
-function allExercisesOfDay(dayId){ return DB.exercises.filter(e=>e.dayId===dayId); }
+function exercisesOfDay(dayId){ return DB.exercises.filter(e=>e.dayId===dayId && !e.archived).sort((a,b)=>(a.order||0)-(b.order||0)); }
+function allExercisesOfDay(dayId){ return DB.exercises.filter(e=>e.dayId===dayId).sort((a,b)=>(a.order||0)-(b.order||0)); }
 function setsOfExercise(exId){ return DB.sets.filter(s=>s.exerciseId===exId).sort((a,b)=> a.date===b.date ? a.setNumber-b.setNumber : (a.date<b.date?-1:1) ); }
 function exerciseById(id){ return DB.exercises.find(e=>e.id===id); }
 
@@ -277,8 +315,11 @@ function setHeader(eyebrow, title, actionSvg, actionFn){
   else { btn.style.display='none'; }
 }
 
+const TAB_ORDER = ['log','split','progress'];
 function render(){
   document.querySelectorAll('.navbtn').forEach(b=> b.classList.toggle('active', b.dataset.tab===state.tab));
+  const activeDot = TAB_ORDER.indexOf(state.tab);
+  document.querySelectorAll('.plate-rule .dot').forEach(d=> d.classList.toggle('hot', +d.dataset.dot===activeDot));
   if(state.tab==='log') renderLog();
   else if(state.tab==='split') renderSplit();
   else if(state.tab==='progress') renderProgress();
@@ -287,6 +328,47 @@ function render(){
 document.querySelectorAll('.navbtn').forEach(b=>{
   b.addEventListener('click', ()=>{ state.tab=b.dataset.tab; render(); });
 });
+
+/* ============ SWIPE BETWEEN TABS ============ */
+// Horizontal swipe on the main content area moves between Log <-> Split <-> Progress,
+// in the same left-to-right order as the bottom nav and header dots.
+(function initSwipeTabs(){
+  const MIN_DX = 70;           // minimum horizontal distance to count as a swipe
+  const MAX_OFF_AXIS_RATIO = 0.6; // vertical drift must stay well below the horizontal distance
+  const MAX_DURATION_MS = 700;
+  let sx=0, sy=0, st=0, tracking=false;
+
+  $main.addEventListener('touchstart', e=>{
+    if(e.touches.length!==1) return;
+    if($modalRoot.innerHTML.trim()!=='') return; // a modal is open, don't hijack its gestures
+    const t = e.target;
+    // Let horizontally-scrollable / draggable / interactive elements keep their own gestures.
+    if(t.closest('.day-scroll') || t.closest('.exercise-list') || t.closest('.chart-wrap') ||
+       t.closest('.segmented') || t.closest('select') || t.closest('input')) return;
+    const touch = e.touches[0];
+    sx=touch.clientX; sy=touch.clientY; st=Date.now(); tracking=true;
+  }, {passive:true});
+
+  $main.addEventListener('touchend', e=>{
+    if(!tracking) return;
+    tracking=false;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - sx;
+    const dy = touch.clientY - sy;
+    const dt = Date.now() - st;
+    if(dt > MAX_DURATION_MS) return;
+    if(Math.abs(dx) < MIN_DX) return;
+    if(Math.abs(dy) > Math.abs(dx) * MAX_OFF_AXIS_RATIO) return;
+
+    const idx = TAB_ORDER.indexOf(state.tab);
+    let newIdx = idx;
+    if(dx < 0 && idx < TAB_ORDER.length-1) newIdx = idx+1; // swiped left -> next tab
+    else if(dx > 0 && idx > 0) newIdx = idx-1;              // swiped right -> previous tab
+    if(newIdx !== idx){ state.tab = TAB_ORDER[newIdx]; render(); }
+  }, {passive:true});
+
+  $main.addEventListener('touchcancel', ()=>{ tracking=false; }, {passive:true});
+})();
 
 /* ============ ONBOARDING ============ */
 function renderOnboarding(){
@@ -368,6 +450,20 @@ function openSplitModal(existingSplit){
 
 function closeModal(){ $modalRoot.innerHTML=''; }
 
+// Swap which split is "active" (the one Log tab logs against). The split being promoted
+// keeps its own createdAt/history; the previously-active split is archived, not deleted.
+async function switchToSplit(splitId){
+  const target = splitById(splitId);
+  if(!target || !target.archivedAt) return;
+  const current = activeSplit();
+  if(current) current.archivedAt = new Date().toISOString();
+  target.archivedAt = null;
+  await save('splits');
+  state.logDayId = null; // let Log tab re-pick a valid day for the newly active split
+  toast(`Switched to "${target.name}"`);
+  render();
+}
+
 /* ============ EXERCISE MODAL ============ */
 function openExerciseModal(splitId, dayId){
   $modalRoot.innerHTML = `
@@ -389,7 +485,9 @@ function openExerciseModal(splitId, dayId){
   document.getElementById('m-save').onclick = async ()=>{
     const name = inp.value.trim();
     if(!name){ toast('Name the exercise'); return; }
-    DB.exercises.push({ id:uid('ex'), splitId, dayId, name, archived:false, createdAt:new Date().toISOString() });
+    const dayExs = allExercisesOfDay(dayId);
+    const nextOrder = dayExs.length ? Math.max(...dayExs.map(e=>e.order||0))+1 : 0;
+    DB.exercises.push({ id:uid('ex'), splitId, dayId, name, archived:false, order:nextOrder, createdAt:new Date().toISOString() });
     await save('exercises');
     closeModal();
     render();
@@ -422,19 +520,24 @@ function confirmRemoveExercise(ex){
 
 /* ============ TAB: SPLIT ============ */
 function renderSplit(){
-  const split = activeSplit();
-  setHeader('Your routine', split?split.name:'No split yet',
+  if(!DB.splits.length){ setHeader('Your routine','No split yet',null,null); renderOnboarding(); return; }
+  if(!state.splitViewId || !DB.splits.some(s=>s.id===state.splitViewId)) state.splitViewId = (activeSplit()||DB.splits[0]).id;
+  const split = splitById(state.splitViewId);
+
+  setHeader('Your routine', split.name,
     '<svg viewBox="0 0 24 24"><path d="M4 21v-3.5L16.5 5a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8L7.5 21.5H4z" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    split ? ()=>openSplitModal(split) : null
+    ()=>openSplitModal(split)
   );
 
-  if(!split){ renderOnboarding(); return; }
-
-  let html = `<div class="card">
-    <div class="row-between" style="margin-bottom:2px;">
-      <span class="pill accent">Active</span>
-      <span style="font-size:11px;color:var(--text-faint);" class="mono">since ${fmtDate(split.createdAt.slice(0,10))}</span>
-    </div>
+  const allSplits = DB.splits.slice().sort((a,b)=> b.createdAt.localeCompare(a.createdAt));
+  let html = `<div class="split-switch-bar">
+    <span class="ldb-label">Viewing</span>
+    <select id="split-switcher">
+      ${allSplits.map(s=>`<option value="${s.id}" ${s.id===split.id?'selected':''}>${esc(s.name)}${s.archivedAt?' (archived)':' (active)'}</option>`).join('')}
+    </select>
+    ${split.archivedAt
+      ? `<button class="log-date-today" id="btn-setactive">Make active</button>`
+      : `<span class="split-active-tag">&bull; active</span>`}
   </div>`;
 
   split.days.forEach(day=>{
@@ -445,17 +548,20 @@ function renderSplit(){
         <button class="btn btn-ghost btn-sm" data-addex="${day.id}">+ Exercise</button>
       </div>
       ${exs.length===0 ? `<p style="font-size:12.5px;color:var(--text-faint);padding:6px 0;">No exercises yet.</p>` :
+        `<div class="exercise-list" data-daylist="${day.id}">` +
         exs.map(ex=>{
           const sets = setsOfExercise(ex.id);
           const last = sets[sets.length-1];
-          return `<div class="exercise-row">
-            <div>
+          return `<div class="exercise-row" data-exid="${ex.id}">
+            <div class="grip" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div class="exname">
               <div class="name">${esc(ex.name)}</div>
               <div class="meta">${sets.length} set${sets.length===1?'':'s'} logged${last? ' &middot; last '+fmtDate(last.date):''}</div>
             </div>
             <button class="icon-btn" data-delex="${ex.id}"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0-1 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           </div>`;
-        }).join('')}
+        }).join('') +
+        `</div>`}
     </div>`;
   });
 
@@ -495,12 +601,141 @@ function renderSplit(){
   document.querySelectorAll('[data-viewarchive]').forEach(b=> b.onclick = ()=>{
     state.tab='progress'; state.progressSplitId=b.dataset.viewarchive; state.progressExerciseId=null; render();
   });
+  const switcher = document.getElementById('split-switcher');
+  if(switcher) switcher.onchange = e=>{ state.splitViewId = e.target.value; render(); };
+  const setActiveBtn = document.getElementById('btn-setactive');
+  if(setActiveBtn) setActiveBtn.onclick = ()=> switchToSplit(split.id);
+
+  document.querySelectorAll('.exercise-list[data-daylist]').forEach(list=>{
+    attachExerciseReorder(list, list.dataset.daylist);
+  });
+}
+
+/* ============ LONG-PRESS REORDER (Split tab exercise lists) ============ */
+const LONG_PRESS_MS = 420;
+const MOVE_CANCEL_PX = 10;
+
+function attachExerciseReorder(listEl, dayId){
+  let pressTimer = null;
+  let startX = 0, startY = 0;
+  let drag = null; // active drag state, or null
+
+  listEl.querySelectorAll('.exercise-row[data-exid]').forEach(row=>{
+    row.addEventListener('touchstart', onTouchStart, {passive:true});
+    row.addEventListener('mousedown', onMouseDown); // desktop testing convenience
+
+    function onTouchStart(e){
+      if(e.touches.length!==1 || e.target.closest('button')) return;
+      const t = e.touches[0];
+      armPress(row, t.clientX, t.clientY);
+      row.addEventListener('touchmove', watchForCancel, {passive:true});
+      row.addEventListener('touchend', disarm, {once:true});
+      row.addEventListener('touchcancel', disarm, {once:true});
+    }
+    function onMouseDown(e){
+      if(e.button!==0 || e.target.closest('button')) return;
+      armPress(row, e.clientX, e.clientY);
+      document.addEventListener('mousemove', watchForCancel);
+      document.addEventListener('mouseup', disarm, {once:true});
+    }
+    function watchForCancel(e){
+      if(drag) return;
+      const p = e.touches ? e.touches[0] : e;
+      if(Math.abs(p.clientX-startX) > MOVE_CANCEL_PX || Math.abs(p.clientY-startY) > MOVE_CANCEL_PX) disarm();
+    }
+    function disarm(){
+      clearTimeout(pressTimer);
+      row.classList.remove('press-armed');
+      row.removeEventListener('touchmove', watchForCancel);
+      document.removeEventListener('mousemove', watchForCancel);
+    }
+    function armPress(row, x, y){
+      startX = x; startY = y;
+      clearTimeout(pressTimer);
+      pressTimer = setTimeout(()=>{ row.classList.add('press-armed'); beginDrag(row, x, y); }, LONG_PRESS_MS);
+    }
+  });
+
+  function beginDrag(row, clientX, clientY){
+    const rows = Array.from(listEl.querySelectorAll('.exercise-row[data-exid]'));
+    const rects = rows.map(r=>r.getBoundingClientRect());
+    const index = rows.indexOf(row);
+    drag = { row, rows, rects, index, currentIndex:index, startY:clientY };
+
+    if(navigator.vibrate) navigator.vibrate(12);
+    row.classList.remove('press-armed');
+    row.classList.add('dragging');
+    row.style.willChange = 'transform';
+    rows.forEach(r=>{ if(r!==row) r.style.transition = 'transform 150ms ease'; });
+
+    document.addEventListener('touchmove', onDragMove, {passive:false});
+    document.addEventListener('touchend', endDrag, {once:true});
+    document.addEventListener('touchcancel', endDrag, {once:true});
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', endDrag, {once:true});
+  }
+
+  function onDragMove(e){
+    if(!drag) return;
+    if(e.cancelable) e.preventDefault();
+    const p = e.touches ? e.touches[0] : e;
+    const deltaY = p.clientY - drag.startY;
+    drag.row.style.transform = `translateY(${deltaY}px)`;
+
+    const dRect = drag.rects[drag.index];
+    const draggedCenter = dRect.top + dRect.height/2 + deltaY;
+
+    let newIndex = drag.index;
+    for(let i=drag.index+1;i<drag.rows.length;i++){
+      const r = drag.rects[i];
+      if(draggedCenter > r.top + r.height/2) newIndex = i;
+    }
+    for(let i=drag.index-1;i>=0;i--){
+      const r = drag.rects[i];
+      if(draggedCenter < r.top + r.height/2) newIndex = i;
+    }
+
+    if(newIndex !== drag.currentIndex){
+      drag.currentIndex = newIndex;
+      drag.rows.forEach((r,i)=>{
+        if(i===drag.index) return;
+        let shift = 0;
+        if(i>drag.index && i<=newIndex) shift = -dRect.height;
+        else if(i<drag.index && i>=newIndex) shift = dRect.height;
+        r.style.transform = shift ? `translateY(${shift}px)` : '';
+      });
+    }
+  }
+
+  async function endDrag(){
+    if(!drag) return;
+    document.removeEventListener('touchmove', onDragMove);
+    document.removeEventListener('mousemove', onDragMove);
+
+    const { rows, index, currentIndex, row } = drag;
+    rows.forEach(r=>{ r.style.transition=''; r.style.transform=''; r.style.willChange=''; });
+    row.classList.remove('dragging');
+    drag = null;
+
+    if(currentIndex !== index){
+      const orderedIds = rows.map(r=>r.dataset.exid);
+      const [movedId] = orderedIds.splice(index, 1);
+      orderedIds.splice(currentIndex, 0, movedId);
+      orderedIds.forEach((id, i)=>{ const ex = exerciseById(id); if(ex) ex.order = i; });
+      await save('exercises');
+      if(navigator.vibrate) navigator.vibrate(8);
+      toast('Order updated');
+    }
+    render();
+  }
 }
 
 /* ============ TAB: LOG ============ */
 function renderLog(){
   const split = activeSplit();
-  setHeader('Today', fmtDate(todayStr()), null, null);
+  if(!state.logDate) state.logDate = todayStr();
+  const isToday = state.logDate === todayStr();
+  setHeader(isToday ? 'Today' : 'Logging for', fmtDate(state.logDate), null, null);
   if(!split){ renderOnboarding(); return; }
 
   if(!state.logDayId || !split.days.some(d=>d.id===state.logDayId)) state.logDayId = split.days[0].id;
@@ -510,6 +745,12 @@ function renderLog(){
     split.days.map(d=>`<button class="day-chip ${d.id===state.logDayId?'active':''}" data-day="${d.id}">${esc(d.name)}</button>`).join('') +
     `</div>`;
 
+  html += `<div class="log-date-bar">
+    <span class="ldb-label">Logging for</span>
+    <input type="date" id="log-date-input" value="${state.logDate}">
+    ${!isToday ? `<button class="log-date-today" id="log-today-btn">Today</button>` : ''}
+  </div>`;
+
   if(exs.length===0){
     html += `<div class="empty">
       <svg viewBox="0 0 24 24"><path d="M6 4v16M18 4v16M2 9h4M2 15h4M18 9h4M18 15h4" stroke-linecap="round"/></svg>
@@ -518,15 +759,15 @@ function renderLog(){
     </div>`;
   } else {
     html += exs.map(ex=>{
-      const todaySets = setsOfExercise(ex.id).filter(s=>s.date===todayStr());
+      const daySets = setsOfExercise(ex.id).filter(s=>s.date===state.logDate);
       return `<div class="card">
-        <div class="row-between" style="margin-bottom:${todaySets.length?'6px':'0'};">
+        <div class="row-between" style="margin-bottom:${daySets.length?'6px':'0'};">
           <h3 style="font-size:14.5px;">${esc(ex.name)}</h3>
           <button class="btn btn-accent btn-sm" data-logset="${ex.id}">+ Set</button>
         </div>
-        ${todaySets.map(s=>{
+        ${daySets.map(s=>{
           const isPr = s.weight === Math.max(...setsOfExercise(ex.id).map(x=>x.weight));
-          return `<div class="set-log-row ${isPr?'pr':''}">
+          return `<div class="set-log-row ${isPr?'pr':''}" data-editset="${s.id}" data-exid="${ex.id}">
             <div class="setnum">${s.setNumber}</div>
             <div class="val weight">${s.weight}<span class="unit">kg</span></div>
             <div class="val">${s.reps}<span class="unit">reps</span></div>
@@ -543,35 +784,48 @@ function renderLog(){
   if(a1) a1.onclick = ()=>openExerciseModal(split.id, state.logDayId);
   if(a2) a2.onclick = ()=>openExerciseModal(split.id, state.logDayId);
   document.querySelectorAll('[data-logset]').forEach(b=> b.onclick = ()=>openSetModal(b.dataset.logset));
-  document.querySelectorAll('[data-delset]').forEach(b=> b.onclick = async ()=>{
+  document.querySelectorAll('[data-delset]').forEach(b=> b.onclick = async (e)=>{
+    e.stopPropagation();
     DB.sets = DB.sets.filter(s=>s.id!==b.dataset.delset);
     await save('sets'); render(); toast('Set removed');
   });
+  document.querySelectorAll('[data-editset]').forEach(row=> row.onclick = (e)=>{
+    if(e.target.closest('[data-delset]')) return;
+    openSetModal(row.dataset.exid, row.dataset.editset);
+  });
+  const dateInput = document.getElementById('log-date-input');
+  if(dateInput) dateInput.onchange = e=>{ state.logDate = e.target.value || todayStr(); render(); };
+  const todayBtn = document.getElementById('log-today-btn');
+  if(todayBtn) todayBtn.onclick = ()=>{ state.logDate = todayStr(); render(); };
 }
 
-function openSetModal(exerciseId){
+function openSetModal(exerciseId, editSetId){
   const ex = exerciseById(exerciseId);
-  const date = todayStr();
-  const existingToday = setsOfExercise(exerciseId).filter(s=>s.date===date);
-  const nextSetNum = existingToday.length ? Math.max(...existingToday.map(s=>s.setNumber))+1 : 1;
-  const lastSet = setsOfExercise(exerciseId).slice(-1)[0];
+  const editSet = editSetId ? DB.sets.find(s=>s.id===editSetId) : null;
+  const date = editSet ? editSet.date : (state.logDate || todayStr());
+  const existingOnDate = setsOfExercise(exerciseId).filter(s=>s.date===date && s.id!==editSetId);
+  // Auto-suggest the next set number as a simple count of sets already logged for this exercise
+  // on this date (0 sets -> 1, 2 sets -> 3, etc). Still just a default; the field stays editable.
+  const nextSetNum = editSet ? editSet.setNumber : existingOnDate.length + 1;
+  const lastSet = editSet ? null : setsOfExercise(exerciseId).slice(-1)[0];
 
   $modalRoot.innerHTML = `
     <div class="modal-overlay" id="m-overlay">
       <div class="modal-sheet">
         <div class="modal-close-row"><button class="icon-btn" id="m-close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button></div>
-        <h2>${esc(ex.name)}</h2>
+        <h2>${editSet ? 'Edit set &middot; ' : ''}${esc(ex.name)}</h2>
         <div class="field-grid3">
-          <div class="field"><label class="field-label">Set #</label><input type="number" id="m-setnum" value="${nextSetNum}" min="1"></div>
-          <div class="field"><label class="field-label">Weight (kg)</label><input type="number" id="m-weight" step="0.5" value="${lastSet?lastSet.weight:''}" placeholder="0"></div>
-          <div class="field"><label class="field-label">Reps</label><input type="number" id="m-reps" value="${lastSet?lastSet.reps:''}" placeholder="0"></div>
+          <div class="field"><label class="field-label">Set #</label><input type="number" id="m-setnum" value="${editSet?editSet.setNumber:nextSetNum}" min="1"></div>
+          <div class="field"><label class="field-label">Weight (kg)</label><input type="number" id="m-weight" step="0.5" value="${editSet?editSet.weight:(lastSet?lastSet.weight:'')}" placeholder="0"></div>
+          <div class="field"><label class="field-label">Reps</label><input type="number" id="m-reps" value="${editSet?editSet.reps:(lastSet?lastSet.reps:'')}" placeholder="0"></div>
         </div>
         <div class="field">
           <label class="field-label">Date</label>
           <input type="date" id="m-date" value="${date}">
         </div>
         <div id="m-err" style="color:var(--rust);font-size:12.5px;margin-bottom:10px;display:none;"></div>
-        <button class="btn btn-accent btn-block" id="m-save">Save set</button>
+        <button class="btn btn-accent btn-block" id="m-save">${editSet ? 'Save changes' : 'Save set'}</button>
+        ${editSet ? `<button class="btn btn-danger btn-block" id="m-delete" style="margin-top:8px;">Delete set</button>` : ''}
       </div>
     </div>`;
   document.getElementById('m-close').onclick = closeModal;
@@ -586,9 +840,20 @@ function openSetModal(exerciseId){
       errEl.textContent = 'Fill in a valid set number, weight, reps, and date.';
       errEl.style.display='block'; return;
     }
-    DB.sets.push({ id:uid('set'), exerciseId, setNumber, date:d, weight, reps, createdAt:new Date().toISOString() });
+    if(editSet){
+      editSet.setNumber = setNumber; editSet.weight = weight; editSet.reps = reps; editSet.date = d;
+    } else {
+      DB.sets.push({ id:uid('set'), exerciseId, setNumber, date:d, weight, reps, createdAt:new Date().toISOString() });
+    }
     await save('sets');
-    closeModal(); render(); toast('Set logged');
+    state.logDate = d; // keep logging against whatever date was used, until changed back
+    closeModal(); render(); toast(editSet ? 'Set updated' : 'Set logged');
+  };
+  const delBtn = document.getElementById('m-delete');
+  if(delBtn) delBtn.onclick = async ()=>{
+    DB.sets = DB.sets.filter(s=>s.id!==editSet.id);
+    await save('sets');
+    closeModal(); render(); toast('Set removed');
   };
 }
 

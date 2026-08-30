@@ -1,12 +1,13 @@
 {
   "name": "Plate & Progress",
   "short_name": "Plate & Progress",
+  "description": "A local workout and fitness progress tracker.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#121417",
   "theme_color": "#121417",
-  "description": "Offline fitness progress tracker",
   "icons": [
     {
       "src": "./icon-512.png",
