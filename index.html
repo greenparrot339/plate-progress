@@ -68,6 +68,28 @@
   .navbtn.active{color:var(--accent);}
   .navbtn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;}
 
+  /* stats */
+  .stats-card{padding:15px 15px 14px;}
+  .stats-chart-wrap{position:relative;width:100%;max-width:440px;margin:2px auto 8px;aspect-ratio:1/1;min-height:290px;}
+  .stats-chart{display:block;width:100%;height:100%;overflow:visible;touch-action:pan-y;}
+  .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+  .stats-metric{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 11px;min-width:0;}
+  .stats-metric .label{font-family:var(--font-display);font-size:11px;letter-spacing:.08em;color:var(--text-dim);text-transform:uppercase;}
+  .stats-metric .value{font-family:var(--font-mono);font-size:20px;font-weight:600;margin-top:3px;}
+  .stats-tooltip{position:absolute;z-index:5;pointer-events:none;min-width:128px;max-width:190px;padding:9px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.28);transform:translate(-50%,-112%);opacity:0;transition:opacity .12s ease;}
+  .stats-tooltip.show{opacity:1;}
+  .stats-tooltip .tt-title{font-family:var(--font-display);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);}
+  .stats-tooltip .tt-value{font-family:var(--font-mono);font-size:15px;font-weight:600;margin-top:2px;}
+  .stats-axis{font-family:var(--font-display);font-size:11px;letter-spacing:.06em;fill:var(--text-dim);text-transform:uppercase;}
+  .stats-hit{fill:transparent;cursor:pointer;}
+  .stats-legend{font-size:11.5px;color:var(--text-faint);line-height:1.45;text-align:center;margin:3px 0 0;}
+  .classification-btn{border:0;background:none;color:var(--text-faint);padding:2px 0;font:inherit;font-family:var(--font-mono);font-size:10.5px;cursor:pointer;text-align:left;}
+  .classification-btn:hover{color:var(--accent);}
+  @media (max-width:380px){
+    .stats-chart-wrap{min-height:260px;}
+    .stats-grid{gap:6px;}
+  }
+
   /* cards */
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 15px;margin-bottom:12px;}
   .card-title{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;font-family:var(--font-display);font-weight:500;}
@@ -188,7 +210,7 @@
       <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
     </button>
   </div>
-  <div class="plate-rule"><div class="line"></div><div class="dot" data-dot="0"></div><div class="dot" data-dot="1"></div><div class="dot" data-dot="2"></div><div class="line"></div></div>
+  <div class="plate-rule"><div class="line"></div><div class="dot" data-dot="0"></div><div class="dot" data-dot="1"></div><div class="dot" data-dot="2"></div><div class="dot" data-dot="3"></div><div class="line"></div></div>
 </div>
 
 <main id="main"></main>
@@ -206,20 +228,70 @@
     <svg viewBox="0 0 24 24"><path d="M4 19V9M11 19V4M18 19v-6" stroke-linecap="round"/></svg>
     Progress
   </button>
+  <button class="navbtn" data-tab="stats">
+    <svg viewBox="0 0 24 24"><path d="M12 3l2.8 5.7L21 9.6l-4.5 4.4 1.1 6.1L12 17.2 6.4 20.1l1.1-6.1L3 9.6l6.2-.9L12 3z" stroke-linejoin="round"/></svg>
+    Stats
+  </button>
 </div>
 
 <div id="modal-root"></div>
 <div class="toast" id="toast"></div>
 
+<script src="exercise-database.js"></script>
 <script>
 /* ============ STATE ============ */
-let DB = { splits: [], exercises: [], sets: [] };
+let DB = { splits: [], exercises: [], sets: [], exerciseClassificationOverrides: {} };
 let state = { tab:'log', logDayId:null, logExerciseId:null, logDate:null, splitEditId:null, splitViewId:null, progressSplitId:null, progressExerciseId:null, progressMetric:'weight' };
 let charts = {};
 const $main = document.getElementById('main');
 const $modalRoot = document.getElementById('modal-root');
 
 function uid(p){ return p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+
+const STATS_GROUPS = ['chest','back','shoulders','arms','legs','core'];
+const STATS_LABELS = {chest:'CHEST',back:'BACK',shoulders:'SHOULDERS',arms:'ARMS',legs:'LEGS',core:'CORE'};
+const EXERCISE_ALIAS_REPLACEMENTS = [
+  [/\bdb\b/g,'dumbbell'], [/\bdd\b/g,'dumbbell'],
+  [/\bbb\b/g,'barbell'], [/\bohp\b/g,'overhead press'],
+  [/\brdl\b/g,'romanian deadlift'], [/\brdl\b/g,'romanian deadlift'],
+  [/\bcgbp\b/g,'close grip bench press'], [/\bskullcrushers?\b/g,'skull crusher']
+];
+let exerciseClassificationIndex = null;
+
+function normalizeExerciseName(name){
+  let s = String(name||'').toLowerCase().trim();
+  s = s.replace(/[’']/g,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+  EXERCISE_ALIAS_REPLACEMENTS.forEach(([re,rep])=>{ s=s.replace(re,rep); });
+  return s.replace(/\s+/g,' ').trim();
+}
+function buildExerciseClassificationIndex(){
+  exerciseClassificationIndex = new Map();
+  const records = (window.PLATE_PROGRESS_EXERCISE_DATABASE && window.PLATE_PROGRESS_EXERCISE_DATABASE.exercises) || [];
+  records.forEach(r=>{
+    const key = r.normalized_name || normalizeExerciseName(r.name);
+    if(!key || !STATS_GROUPS.includes(r.radar_group)) return;
+    const existing = exerciseClassificationIndex.get(key);
+    if(!existing || ((r.sources||[]).includes('plate_progress') && !(existing.sources||[]).includes('plate_progress'))){
+      exerciseClassificationIndex.set(key,r);
+    }
+  });
+}
+function builtInExerciseClassification(name){
+  if(!exerciseClassificationIndex) buildExerciseClassificationIndex();
+  const record = exerciseClassificationIndex.get(normalizeExerciseName(name));
+  return record && STATS_GROUPS.includes(record.radar_group) ? record.radar_group : null;
+}
+function classifyExercise(name){
+  const key = normalizeExerciseName(name);
+  const override = DB.exerciseClassificationOverrides && DB.exerciseClassificationOverrides[key];
+  return override && STATS_GROUPS.includes(override.group) ? override.group : builtInExerciseClassification(name);
+}
+function classificationSource(name){
+  const key = normalizeExerciseName(name);
+  const override = DB.exerciseClassificationOverrides && DB.exerciseClassificationOverrides[key];
+  if(override && STATS_GROUPS.includes(override.group)) return 'manual';
+  return builtInExerciseClassification(name) ? 'database' : 'unknown';
+}
 function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function fmtDate(s){ const d=new Date(s+'T00:00:00'); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -255,11 +327,12 @@ function idbSet(key,value){
 async function loadAll(){
   try{
     await openDB();
-    const [s,e,st]=await Promise.all([idbGet('splits'),idbGet('exercises'),idbGet('sets')]);
-    DB.splits=s||[]; DB.exercises=e||[]; DB.sets=st||[];
+    const [s,e,st,ov]=await Promise.all([idbGet('splits'),idbGet('exercises'),idbGet('sets'),idbGet('exerciseClassificationOverrides')]);
+    DB.splits=s||[]; DB.exercises=e||[]; DB.sets=st||[]; DB.exerciseClassificationOverrides=ov||{};
+    buildExerciseClassificationIndex();
     ensureExerciseOrder();
     if(ensureSplitDayHistory()) await idbSet('splits',DB.splits);
-  }catch(err){ console.error('IndexedDB load failed',err); DB={splits:[],exercises:[],sets:[]}; toast('Could not open local storage'); }
+  }catch(err){ console.error('IndexedDB load failed',err); DB={splits:[],exercises:[],sets:[],exerciseClassificationOverrides:{}}; toast('Could not open local storage'); }
 }
 // One-time migration: give any exercise missing an `order` a sequential value within its day,
 // so existing splits (created before drag-reorder existed) sort predictably.
@@ -295,7 +368,7 @@ async function save(key){
   catch(err){ console.error('IndexedDB save failed',err); toast('Save failed — try again'); }
 }
 async function exportBackup(){
-  const backup={version:1,app:'Plate & Progress',exportedAt:new Date().toISOString(),data:DB};
+  const backup={version:2,app:'Plate & Progress',exportedAt:new Date().toISOString(),data:DB};
   const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download='plate-progress-backup-'+todayStr()+'.json'; a.click();
@@ -309,8 +382,8 @@ function importBackup(){
       const parsed=JSON.parse(await file.text());
       if(!parsed.data || !Array.isArray(parsed.data.splits) || !Array.isArray(parsed.data.exercises) || !Array.isArray(parsed.data.sets)) throw new Error('Invalid backup');
       if(!confirm('Import this backup and replace the current local data?')) return;
-      DB={splits:parsed.data.splits,exercises:parsed.data.exercises,sets:parsed.data.sets};
-      await Promise.all(['splits','exercises','sets'].map(save)); render(); toast('Backup imported');
+      DB={splits:parsed.data.splits,exercises:parsed.data.exercises,sets:parsed.data.sets,exerciseClassificationOverrides:parsed.data.exerciseClassificationOverrides||{}};
+      await Promise.all(['splits','exercises','sets','exerciseClassificationOverrides'].map(save)); render(); toast('Backup imported');
     }catch(err){ console.error(err); toast('Invalid backup file'); }
   }; input.click();
 }
@@ -336,7 +409,7 @@ function setHeader(eyebrow, title, actionSvg, actionFn){
   else { btn.style.display='none'; }
 }
 
-const TAB_ORDER = ['log','split','progress'];
+const TAB_ORDER = ['log','split','progress','stats'];
 function render(){
   document.querySelectorAll('.navbtn').forEach(b=> b.classList.toggle('active', b.dataset.tab===state.tab));
   const activeDot = TAB_ORDER.indexOf(state.tab);
@@ -344,6 +417,7 @@ function render(){
   if(state.tab==='log') renderLog();
   else if(state.tab==='split') renderSplit();
   else if(state.tab==='progress') renderProgress();
+  else if(state.tab==='stats') renderStats();
 }
 
 /* ============ TAB SWITCHING + SWIPE TRANSITION ============ */
@@ -376,7 +450,7 @@ document.querySelectorAll('.navbtn').forEach(b=>{
 });
 
 /* ============ SWIPE BETWEEN TABS ============ */
-// Horizontal swipe anywhere in the app moves between Log <-> Split <-> Progress,
+// Horizontal swipe anywhere in the app moves between Log <-> Split <-> Progress <-> Stats,
 // in the same left-to-right order as the bottom nav and header dots.
 (function initSwipeTabs(){
   const MIN_DX = 60;            // minimum horizontal distance to count as a swipe
@@ -521,6 +595,36 @@ async function switchToSplit(splitId){
 }
 
 /* ============ EXERCISE MODAL ============ */
+
+function openMuscleClassificationModal(exerciseName, onSelect){
+  $modalRoot.innerHTML = `
+    <div class="modal-overlay" id="m-overlay">
+      <div class="modal-sheet">
+        <div class="modal-close-row"><button class="icon-btn" id="m-close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button></div>
+        <h2>Muscle group not recognized</h2>
+        <p style="font-size:13px;color:var(--text-dim);line-height:1.5;margin:8px 0 14px;">
+          <strong style="color:var(--text);">${esc(exerciseName)}</strong> isn't classified in the local exercise database. Select its primary muscle group.
+        </p>
+        <div class="field-grid" style="grid-template-columns:1fr 1fr;">
+          ${STATS_GROUPS.map(g=>`<button class="btn btn-ghost btn-block" data-pick-group="${g}">${STATS_LABELS[g]}</button>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('m-close').onclick=closeModal;
+  document.getElementById('m-overlay').onclick=e=>{ if(e.target.id==='m-overlay') closeModal(); };
+  document.querySelectorAll('[data-pick-group]').forEach(b=> b.onclick=async()=>{
+    const group=b.dataset.pickGroup;
+    await onSelect(group);
+    closeModal();
+  });
+}
+async function saveExerciseClassification(name, group){
+  const key=normalizeExerciseName(name);
+  if(!key || !STATS_GROUPS.includes(group)) return;
+  DB.exerciseClassificationOverrides[key]={group,updatedAt:new Date().toISOString()};
+  await save('exerciseClassificationOverrides');
+}
+
 function openExerciseModal(splitId, dayId){
   $modalRoot.innerHTML = `
     <div class="modal-overlay" id="m-overlay">
@@ -541,13 +645,22 @@ function openExerciseModal(splitId, dayId){
   document.getElementById('m-save').onclick = async ()=>{
     const name = inp.value.trim();
     if(!name){ toast('Name the exercise'); return; }
-    const dayExs = allExercisesOfDay(dayId);
-    const nextOrder = dayExs.length ? Math.max(...dayExs.map(e=>e.order||0))+1 : 0;
-    DB.exercises.push({ id:uid('ex'), splitId, dayId, name, archived:false, order:nextOrder, createdAt:new Date().toISOString() });
-    await save('exercises');
-    closeModal();
-    render();
-    toast('Exercise added');
+    const knownGroup = classifyExercise(name);
+    const finishAdd = async group=>{
+      const dayExs = allExercisesOfDay(dayId);
+      const nextOrder = dayExs.length ? Math.max(...dayExs.map(e=>e.order||0))+1 : 0;
+      DB.exercises.push({ id:uid('ex'), splitId, dayId, name, archived:false, order:nextOrder, createdAt:new Date().toISOString() });
+      await save('exercises');
+      if(group && classificationSource(name)==='unknown') await saveExerciseClassification(name, group);
+      render();
+      toast('Exercise added');
+    };
+    if(!knownGroup){
+      openMuscleClassificationModal(name, async group=>{ await finishAdd(group); });
+    } else {
+      closeModal();
+      await finishAdd(knownGroup);
+    }
   };
 }
 
@@ -650,6 +763,7 @@ function renderSplit(){
             <div class="exname">
               <div class="name">${esc(ex.name)}</div>
               <div class="meta">${sets.length} set${sets.length===1?'':'s'} logged${last? ' &middot; last '+fmtDate(last.date):''}</div>
+              <button class="classification-btn" data-classifyex="${ex.id}">${classifyExercise(ex.name) ? STATS_LABELS[classifyExercise(ex.name)] + (classificationSource(ex.name)==='manual' ? ' · custom' : '') : 'Classify muscle group'}</button>
             </div>
             <button class="icon-btn" data-delex="${ex.id}"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0-1 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           </div>`;
@@ -690,6 +804,15 @@ function renderSplit(){
 
   document.querySelectorAll('[data-addex]').forEach(b=> b.onclick = ()=> openExerciseModal(split.id, b.dataset.addex));
   document.querySelectorAll('[data-delex]').forEach(b=> b.onclick = ()=> confirmRemoveExercise(exerciseById(b.dataset.delex)));
+  document.querySelectorAll('[data-classifyex]').forEach(b=> b.onclick = e=>{
+    e.stopPropagation();
+    const ex=exerciseById(b.dataset.classifyex);
+    if(ex) openMuscleClassificationModal(ex.name, async group=>{
+      await saveExerciseClassification(ex.name, group);
+      render();
+      toast('Muscle group updated');
+    });
+  });
   const nsBtn = document.getElementById('btn-newsplit');
   if(nsBtn) nsBtn.onclick = ()=> openSplitModal(null);
   const exportBtn=document.getElementById('btn-export'); if(exportBtn) exportBtn.onclick=exportBackup;
@@ -958,6 +1081,123 @@ function openSetModal(exerciseId, editSetId){
 }
 
 /* ============ TAB: PROGRESS ============ */
+
+/* ============ TAB: STATS ============ */
+function statsPoint(cx,cy,r,index,total){
+  const angle = -Math.PI/2 + (Math.PI*2*index/total);
+  return {x:cx + Math.cos(angle)*r, y:cy + Math.sin(angle)*r};
+}
+function renderStats(){
+  const split = activeSplit();
+  if(!split){
+    setHeader('Training analysis','Stats',null,null);
+    $main.innerHTML = `<div class="empty" style="margin-top:20px;">
+      <svg viewBox="0 0 24 24"><path d="M4 19V9M11 19V4M18 19v-6" stroke-linecap="round"/></svg>
+      <p>Create a split to see training stats.</p>
+      <button class="btn btn-accent" id="stats-newsplit">Create split</button>
+    </div>`;
+    const b=document.getElementById('stats-newsplit'); if(b) b.onclick=()=>openSplitModal(null);
+    return;
+  }
+
+  const freq = Object.fromEntries(STATS_GROUPS.map(g=>[g,0]));
+  split.days.forEach(day=>{
+    const trainedToday = new Set();
+    exercisesOfDay(day.id).forEach(ex=>{
+      const group = classifyExercise(ex.name);
+      if(group) trainedToday.add(group);
+    });
+    trainedToday.forEach(group=> freq[group]++);
+  });
+
+  setHeader('Training analysis', split.name, null, null);
+  const labels = STATS_GROUPS.map(g=>STATS_LABELS[g]);
+  const values = STATS_GROUPS.map(g=>freq[g]);
+  const cx=150, cy=150, maxR=104, rings=4, total=STATS_GROUPS.length;
+  const maxValue=Math.max(1,...values);
+  const gridPolys=[];
+  for(let ring=1;ring<=rings;ring++){
+    const rr=maxR*ring/rings;
+    const pts=STATS_GROUPS.map((_,i)=>{const p=statsPoint(cx,cy,rr,i,total);return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;}).join(' ');
+    gridPolys.push(`<polygon points="${pts}" fill="none" stroke="var(--border)" stroke-width="1"/>`);
+  }
+  const axisLines=STATS_GROUPS.map((_,i)=>{
+    const p=statsPoint(cx,cy,maxR,i,total);
+    return `<line x1="${cx}" y1="${cy}" x2="${p.x.toFixed(1)}" y2="${p.y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>`;
+  }).join('');
+  const dataPts=STATS_GROUPS.map((g,i)=>{
+    const p=statsPoint(cx,cy,maxR*(freq[g]/maxValue),i,total);
+    return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+  }).join(' ');
+  const axisLabels=STATS_GROUPS.map((g,i)=>{
+    const p=statsPoint(cx,cy,maxR+27,i,total);
+    let anchor='middle';
+    if(p.x<cx-8) anchor='end'; else if(p.x>cx+8) anchor='start';
+    let dy='0.35em';
+    if(p.y<cy-70) dy='0';
+    else if(p.y>cy+70) dy='1em';
+    return `<text class="stats-axis" x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" text-anchor="${anchor}" dy="${dy}">${labels[i]}</text>`;
+  }).join('');
+  const hitAreas=STATS_GROUPS.map((g,i)=>{
+    const p=statsPoint(cx,cy,maxR+10,i,total);
+    return `<circle class="stats-hit" data-stats-group="${g}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="25" aria-label="${labels[i]} ${freq[g]} times per week"/>`;
+  }).join('');
+
+  $main.innerHTML = `
+    <div class="card stats-card">
+      <div class="card-title">Current split</div>
+      <div class="row-between" style="margin-bottom:2px;">
+        <h2 style="font-size:18px;">${esc(split.name)}</h2>
+        <span class="mono" style="font-size:11px;color:var(--text-faint);">${split.days.length} day${split.days.length===1?'':'s'}</span>
+      </div>
+      <div class="stats-chart-wrap" id="stats-chart-wrap">
+        <svg class="stats-chart" id="stats-radar" viewBox="0 0 300 300" role="img" aria-label="Weekly training frequency radar chart">
+          <g>${gridPolys.join('')}</g>
+          <g>${axisLines}</g>
+          <polygon points="${dataPts}" fill="var(--accent)" fill-opacity=".16" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round"/>
+          ${STATS_GROUPS.map((g,i)=>{const p=statsPoint(cx,cy,maxR*(freq[g]/maxValue),i,total);return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>`;}).join('')}
+          ${axisLabels}
+          ${hitAreas}
+        </svg>
+        <div class="stats-tooltip" id="stats-tooltip"></div>
+      </div>
+      <p class="stats-legend">Frequency = number of training days per week.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">Frequency summary</div>
+      <div class="stats-grid">
+        ${STATS_GROUPS.map(g=>`<div class="stats-metric"><div class="label">${STATS_LABELS[g]}</div><div class="value">${freq[g]}×</div></div>`).join('')}
+      </div>
+    </div>`;
+
+  const tooltip=document.getElementById('stats-tooltip');
+  const wrap=document.getElementById('stats-chart-wrap');
+  function showStatsTooltip(group, event){
+    const value=freq[group], label=STATS_LABELS[group];
+    tooltip.innerHTML=`<div class="tt-title">${label}</div><div class="tt-value">${value}× / WEEK</div>`;
+    const rect=wrap.getBoundingClientRect();
+    const point=event && event.clientX!=null
+      ? {x:event.clientX-rect.left,y:event.clientY-rect.top}
+      : {x:rect.width/2,y:rect.height/2};
+    tooltip.style.left=`${Math.max(70,Math.min(rect.width-70,point.x))}px`;
+    tooltip.style.top=`${Math.max(45,Math.min(rect.height-25,point.y))}px`;
+    tooltip.classList.add('show');
+  }
+  function hideStatsTooltip(){ tooltip.classList.remove('show'); }
+
+  document.querySelectorAll('.stats-hit').forEach(hit=>{
+    const group=hit.dataset.statsGroup;
+    hit.addEventListener('pointerenter',e=>showStatsTooltip(group,e));
+    hit.addEventListener('pointermove',e=>{ if(e.pointerType==='mouse') showStatsTooltip(group,e); });
+    hit.addEventListener('pointerleave',hideStatsTooltip);
+    hit.addEventListener('pointerdown',e=>{ e.stopPropagation(); showStatsTooltip(group,e); });
+    hit.addEventListener('click',e=>{ e.stopPropagation(); showStatsTooltip(group,e); });
+  });
+  document.getElementById('stats-radar').addEventListener('click',e=>{
+    if(!e.target.closest('.stats-hit')) hideStatsTooltip();
+  });
+}
+
 function renderProgress(){
   if(!DB.splits.length){ setHeader('Progress','No data yet',null,null); renderOnboarding(); return; }
   if(!state.progressSplitId) state.progressSplitId = (activeSplit()||DB.splits[0]).id;

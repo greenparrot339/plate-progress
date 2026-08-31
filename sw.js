@@ -1,10 +1,11 @@
-const CACHE_NAME = 'plate-progress-v5';
+const CACHE_NAME = 'plate-progress-v6';
 
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
-  './icon-512.png'
+  './icon-512.png',
+  './exercise-database.js'
 ];
 
 const EXTERNAL_RESOURCES = [
@@ -20,9 +21,6 @@ async function cacheExternalResources(cache) {
       const copy = response.clone();
       await cache.put(url, copy);
 
-      // Google Fonts CSS points to the actual .woff2 files on fonts.gstatic.com.
-      // Fetch and cache those too so the exact Oswald/Inter/JetBrains Mono fonts
-      // remain available when the app is offline.
       if (url.includes('fonts.googleapis.com')) {
         const css = await response.text();
         const fontUrls = [...css.matchAll(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/g)].map(m => m[1]);
@@ -81,8 +79,6 @@ self.addEventListener('fetch', event => {
       }
       return response;
     } catch (error) {
-      // Navigation fallback keeps the installed app usable if a navigation is
-      // attempted while completely offline.
       if (event.request.mode === 'navigate') {
         const fallback = await caches.match('./index.html');
         if (fallback) return fallback;
