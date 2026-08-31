@@ -35,7 +35,7 @@
     --font-mono:'JetBrains Mono',monospace;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--font-body);}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--font-body);overflow-x:hidden;}
   body{padding-bottom:calc(72px + env(safe-area-inset-bottom));min-height:100vh;}
   h1,h2,h3{font-family:var(--font-display);font-weight:600;text-transform:uppercase;letter-spacing:0.03em;margin:0;}
   .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
@@ -54,6 +54,11 @@
   .plate-rule .line{flex:1;height:1px;background:var(--border);}
 
   main{padding:16px 18px 24px;max-width:520px;margin:0 auto;}
+  #main{transition:transform 0.17s cubic-bezier(.32,.72,.35,1), opacity 0.15s ease; will-change:transform,opacity;}
+  #main.main-exit-left{transform:translateX(-6%) scale(0.985);opacity:0;}
+  #main.main-exit-right{transform:translateX(6%) scale(0.985);opacity:0;}
+  #main.main-enter-from-right{transition:none;transform:translateX(6%) scale(0.985);opacity:0;}
+  #main.main-enter-from-left{transition:none;transform:translateX(-6%) scale(0.985);opacity:0;}
 
   /* nav */
   .navbar{position:fixed;bottom:0;left:0;right:0;z-index:30;background:var(--surface);border-top:1px solid var(--border);
@@ -103,7 +108,7 @@
   .exercise-row .grip{flex-shrink:0;display:flex;flex-direction:column;gap:3px;padding:4px 2px;color:var(--text-faint);}
   .exercise-row .grip span{width:3px;height:3px;border-radius:50%;background:currentColor;box-shadow:7px 0 0 currentColor;}
   .exercise-row .exname{flex:1;min-width:0;}
-  .exercise-row .name{font-size:15px;font-weight:500;}
+  .exercise-row .name{font-size:15px;font-weight:500;text-transform:uppercase;}
   .exercise-row .meta{font-size:11.5px;color:var(--text-faint);margin-top:2px;}
   .exercise-row.dragging{box-shadow:0 6px 18px rgba(0,0,0,0.45);border-radius:8px;border-bottom-color:transparent;opacity:0.97;}
   .exercise-row.press-armed{background:var(--surface2);border-radius:8px;}
@@ -253,6 +258,7 @@ async function loadAll(){
     const [s,e,st]=await Promise.all([idbGet('splits'),idbGet('exercises'),idbGet('sets')]);
     DB.splits=s||[]; DB.exercises=e||[]; DB.sets=st||[];
     ensureExerciseOrder();
+    if(ensureSplitDayHistory()) await idbSet('splits',DB.splits);
   }catch(err){ console.error('IndexedDB load failed',err); DB={splits:[],exercises:[],sets:[]}; toast('Could not open local storage'); }
 }
 // One-time migration: give any exercise missing an `order` a sequential value within its day,
@@ -268,6 +274,21 @@ function ensureExerciseOrder(){
       nextByDay[ex.dayId] = Math.max(nextByDay[ex.dayId] ?? -1, ex.order+1);
     }
   });
+}
+// Preserve every day ID that has ever belonged to a split. This lets permanent
+// split deletion clean up exercises from days that were later removed while editing.
+function ensureSplitDayHistory(){
+  let changed = false;
+  DB.splits.forEach(split=>{
+    const current = Array.isArray(split.days) ? split.days.map(d=>d.id) : [];
+    const previous = Array.isArray(split.dayIds) ? split.dayIds : [];
+    const merged = [...new Set([...previous, ...current])];
+    if(merged.length !== previous.length || merged.some((id,i)=>id!==previous[i])){
+      split.dayIds = merged;
+      changed = true;
+    }
+  });
+  return changed;
 }
 async function save(key){
   try{ await idbSet(key,DB[key]); }
@@ -325,31 +346,66 @@ function render(){
   else if(state.tab==='progress') renderProgress();
 }
 
+/* ============ TAB SWITCHING + SWIPE TRANSITION ============ */
+// goToTab is the single entry point for changing tabs (nav taps and swipes both use it),
+// so every tab change gets the same sliding "page turn" style transition, direction-aware:
+// moving right through the tab order slides content out to the left / in from the right,
+// and vice versa moving left.
+let tabSwitching = false;
+function goToTab(newTab){
+  if(newTab===state.tab || tabSwitching) return;
+  const oldIdx = TAB_ORDER.indexOf(state.tab);
+  const newIdx = TAB_ORDER.indexOf(newTab);
+  const forward = newIdx > oldIdx;
+  tabSwitching = true;
+  $main.classList.add(forward ? 'main-exit-left' : 'main-exit-right');
+  setTimeout(()=>{
+    state.tab = newTab;
+    render();
+    $main.classList.remove('main-exit-left','main-exit-right');
+    $main.classList.add(forward ? 'main-enter-from-right' : 'main-enter-from-left');
+    requestAnimationFrame(()=> requestAnimationFrame(()=>{
+      $main.classList.remove('main-enter-from-right','main-enter-from-left');
+      tabSwitching = false;
+    }));
+  }, 170);
+}
+
 document.querySelectorAll('.navbtn').forEach(b=>{
-  b.addEventListener('click', ()=>{ state.tab=b.dataset.tab; render(); });
+  b.addEventListener('click', ()=> goToTab(b.dataset.tab));
 });
 
 /* ============ SWIPE BETWEEN TABS ============ */
-// Horizontal swipe on the main content area moves between Log <-> Split <-> Progress,
+// Horizontal swipe anywhere in the app moves between Log <-> Split <-> Progress,
 // in the same left-to-right order as the bottom nav and header dots.
 (function initSwipeTabs(){
-  const MIN_DX = 70;           // minimum horizontal distance to count as a swipe
+  const MIN_DX = 60;            // minimum horizontal distance to count as a swipe
   const MAX_OFF_AXIS_RATIO = 0.6; // vertical drift must stay well below the horizontal distance
   const MAX_DURATION_MS = 700;
   let sx=0, sy=0, st=0, tracking=false;
 
-  $main.addEventListener('touchstart', e=>{
+  document.addEventListener('touchstart', e=>{
     if(e.touches.length!==1) return;
     if($modalRoot.innerHTML.trim()!=='') return; // a modal is open, don't hijack its gestures
     const t = e.target;
-    // Let horizontally-scrollable / draggable / interactive elements keep their own gestures.
-    if(t.closest('.day-scroll') || t.closest('.exercise-list') || t.closest('.chart-wrap') ||
-       t.closest('.segmented') || t.closest('select') || t.closest('input')) return;
+    // Protect controls and horizontally-scrollable areas. Exercise rows themselves
+    // remain swipeable; vertical movement is handed back to scrolling/drag-reorder.
+    if(t.closest('.day-scroll') || t.closest('.chart-wrap') || t.closest('.segmented') ||
+       t.closest('select') || t.closest('input') || t.closest('button')) return;
     const touch = e.touches[0];
     sx=touch.clientX; sy=touch.clientY; st=Date.now(); tracking=true;
   }, {passive:true});
 
-  $main.addEventListener('touchend', e=>{
+  document.addEventListener('touchmove', e=>{
+    if(!tracking || e.touches.length!==1) return;
+    const touch=e.touches[0];
+    const dx=touch.clientX-sx, dy=touch.clientY-sy;
+    // Once movement is clearly vertical, stop tracking so normal page scroll or
+    // long-press exercise reordering can proceed without interference.
+    if(Math.abs(dy)>10 && Math.abs(dy)>Math.abs(dx)*0.75) tracking=false;
+  }, {passive:true});
+
+  document.addEventListener('touchend', e=>{
     if(!tracking) return;
     tracking=false;
     const touch = e.changedTouches[0];
@@ -361,13 +417,11 @@ document.querySelectorAll('.navbtn').forEach(b=>{
     if(Math.abs(dy) > Math.abs(dx) * MAX_OFF_AXIS_RATIO) return;
 
     const idx = TAB_ORDER.indexOf(state.tab);
-    let newIdx = idx;
-    if(dx < 0 && idx < TAB_ORDER.length-1) newIdx = idx+1; // swiped left -> next tab
-    else if(dx > 0 && idx > 0) newIdx = idx-1;              // swiped right -> previous tab
-    if(newIdx !== idx){ state.tab = TAB_ORDER[newIdx]; render(); }
+    if(dx < 0 && idx < TAB_ORDER.length-1) goToTab(TAB_ORDER[idx+1]); // swiped left -> next tab
+    else if(dx > 0 && idx > 0) goToTab(TAB_ORDER[idx-1]);              // swiped right -> previous tab
   }, {passive:true});
 
-  $main.addEventListener('touchcancel', ()=>{ tracking=false; }, {passive:true});
+  document.addEventListener('touchcancel', ()=>{ tracking=false; }, {passive:true});
 })();
 
 /* ============ ONBOARDING ============ */
@@ -428,17 +482,19 @@ function openSplitModal(existingSplit){
     if(isNew){
       const prev = activeSplit();
       if(prev) prev.archivedAt = new Date().toISOString();
-      DB.splits.push({ id:uid('split'), name, days:cleanDays, createdAt:new Date().toISOString(), archivedAt:null });
+      DB.splits.push({ id:uid('split'), name, days:cleanDays, dayIds:cleanDays.map(d=>d.id), createdAt:new Date().toISOString(), archivedAt:null });
       await save('splits');
       if(prev) toast('New split started — old one saved in Archive');
       else toast('Split created');
     } else {
       existingSplit.name = name;
       const oldDayIds = new Set(existingSplit.days.map(d=>d.id));
+      const historicalDayIds = new Set(existingSplit.dayIds || []);
       const newDayIds = new Set(cleanDays.map(d=>d.id));
       // exercises on removed days get archived (history kept), not deleted
       oldDayIds.forEach(id=>{ if(!newDayIds.has(id)) DB.exercises.forEach(ex=>{ if(ex.dayId===id) ex.archived=true; }); });
       existingSplit.days = cleanDays;
+      existingSplit.dayIds = [...new Set([...historicalDayIds, ...oldDayIds, ...newDayIds])];
       await save('splits');
       await save('exercises');
       toast('Split updated');
@@ -494,6 +550,43 @@ function openExerciseModal(splitId, dayId){
     toast('Exercise added');
   };
 }
+
+// Permanently deletes an archived split, along with the exercises and logged sets that
+// belong to it. Only meant to be reachable for archived splits — the active one can't be
+// deleted directly, since it's always either the one you're logging against or gets
+// archived automatically when you start/switch to a different split.
+function confirmDeleteSplit(split){
+  // Use the exercise's splitId as the primary relationship. The dayId fallback
+  // also covers older records that may predate splitId being stored reliably.
+  const dayIds = new Set([...(split.dayIds || []), ...(split.days || []).map(d=>d.id)]);
+  const exIds = new Set(DB.exercises
+    .filter(e=>e.splitId===split.id || dayIds.has(e.dayId))
+    .map(e=>e.id));
+  const setCount = DB.sets.filter(s=>exIds.has(s.exerciseId)).length;
+  $modalRoot.innerHTML = `
+    <div class="modal-overlay" id="m-overlay">
+      <div class="modal-sheet">
+        <div class="modal-close-row"><button class="icon-btn" id="m-close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button></div>
+        <h2>Delete ${esc(split.name)}?</h2>
+        <p style="font-size:13.5px;color:var(--text-dim);line-height:1.5;margin-bottom:16px;">
+          This permanently deletes this split along with its ${exIds.size} exercise${exIds.size===1?'':'s'} and ${setCount} logged set${setCount===1?'':'s'}. This can't be undone.
+        </p>
+        <button class="btn btn-danger btn-block" id="m-confirm">Delete split</button>
+      </div>
+    </div>`;
+  document.getElementById('m-close').onclick = closeModal;
+  document.getElementById('m-overlay').onclick = e=>{ if(e.target.id==='m-overlay') closeModal(); };
+  document.getElementById('m-confirm').onclick = async ()=>{
+    DB.exercises = DB.exercises.filter(e=>!exIds.has(e.id));
+    DB.sets = DB.sets.filter(s=>!exIds.has(s.exerciseId));
+    DB.splits = DB.splits.filter(s=>s.id!==split.id);
+    await Promise.all(['splits','exercises','sets'].map(save));
+    if(state.splitViewId===split.id) state.splitViewId = null;
+    if(state.progressSplitId===split.id) state.progressSplitId = null;
+    closeModal(); render(); toast('Split deleted');
+  };
+}
+
 
 function confirmRemoveExercise(ex){
   const hasSets = DB.sets.some(s=>s.exerciseId===ex.id);
@@ -583,7 +676,10 @@ function renderSplit(){
             <div class="name">${esc(s.name)}</div>
             <div class="dates">${fmtDate(s.createdAt.slice(0,10))} &rarr; ${fmtDate(s.archivedAt.slice(0,10))}</div>
           </div>
-          <button class="btn btn-ghost btn-sm" data-viewarchive="${s.id}">View progress</button>
+          <div style="display:flex;gap:4px;">
+            <button class="btn btn-ghost btn-sm" data-viewarchive="${s.id}">View progress</button>
+            <button class="icon-btn" data-delsplit="${s.id}" style="color:var(--rust);"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0-1 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          </div>
         </div>
       </div>`;
     });
@@ -600,6 +696,10 @@ function renderSplit(){
   const importBtn=document.getElementById('btn-import'); if(importBtn) importBtn.onclick=importBackup;
   document.querySelectorAll('[data-viewarchive]').forEach(b=> b.onclick = ()=>{
     state.tab='progress'; state.progressSplitId=b.dataset.viewarchive; state.progressExerciseId=null; render();
+  });
+  document.querySelectorAll('[data-delsplit]').forEach(b=> b.onclick = (e)=>{
+    e.stopPropagation();
+    confirmDeleteSplit(splitById(b.dataset.delsplit));
   });
   const switcher = document.getElementById('split-switcher');
   if(switcher) switcher.onchange = e=>{ state.splitViewId = e.target.value; render(); };
@@ -907,7 +1007,8 @@ function renderProgress(){
   // ---- stats ----
   const weights = sets.map(s=>s.weight);
   const prWeight = Math.max(...weights);
-  const prSet = sets.find(s=>s.weight===prWeight);
+  const setsAtPrWeight = sets.filter(s=>s.weight===prWeight);
+  const prSet = setsAtPrWeight.reduce((best,s)=> s.reps>best.reps ? s : best, setsAtPrWeight[0]);
   const totalVolume = sets.reduce((a,s)=>a+s.weight*s.reps,0);
   const sessionsMap = {};
   sets.forEach(s=>{ (sessionsMap[s.date]=sessionsMap[s.date]||[]).push(s); });
