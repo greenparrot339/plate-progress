@@ -1,15 +1,20 @@
-const CACHE_NAME = 'plate-progress-v6';
+const CACHE_NAME = 'plate-progress-v13';
 
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
-  './icon-512.png',
-  './exercise-database.js'
+  './exercise-database.js',
+  './stats3d.js',
+  './body.glb'
 ];
 
 const EXTERNAL_RESOURCES = [
   'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/three.js/128/three.min.js',
+  'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/loaders/GLTFLoader.js',
   'https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap'
 ];
 
@@ -62,6 +67,7 @@ self.addEventListener('fetch', event => {
   const isSameOrigin = url.origin === self.location.origin;
   const isDependency =
     url.hostname === 'cdnjs.cloudflare.com' ||
+    url.hostname === 'cdn.jsdelivr.net' ||
     url.hostname === 'fonts.googleapis.com' ||
     url.hostname === 'fonts.gstatic.com';
 
