@@ -199,11 +199,35 @@
   .trend-up{color:var(--good);}
   .trend-down{color:var(--rust);}
 
+  .overload-card{border-color:var(--border);}
+  .overload-main{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;}
+  .overload-kicker{font-size:10.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;}
+  .overload-title{font-size:16px;font-weight:600;}
+  .overload-status{font-family:var(--font-mono);font-size:12.5px;font-weight:700;text-align:right;white-space:nowrap;}
+  .overload-detail{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .overload-chip{background:var(--surface2);border-radius:7px;padding:7px 9px;font-family:var(--font-mono);font-size:11px;color:var(--text-dim);}
+  .overload-note{font-size:11.5px;color:var(--text-faint);line-height:1.45;margin-top:10px;}
+  .overload-note-main{color:var(--text-faint);}
+  .overload-note-meta{margin-top:6px;color:var(--text-faint);font-family:var(--font-mono);font-size:10.5px;}
+  .overload-progress{height:4px;background:var(--surface2);border-radius:4px;overflow:hidden;margin-top:9px;}
+  .overload-progress>span{display:block;height:100%;background:var(--accent);border-radius:4px;}
+
   .modal-overlay{position:fixed;inset:0;background:rgba(8,9,10,0.72);z-index:100;display:flex;align-items:flex-end;justify-content:center;}
   .modal-sheet{background:var(--surface);border:1px solid var(--border);border-bottom:none;border-radius:16px 16px 0 0;
     width:100%;max-width:520px;max-height:85vh;overflow-y:auto;padding:20px 18px calc(20px + env(safe-area-inset-bottom));}
-  .modal-sheet h2{font-size:16px;margin-bottom:16px;}
+  .modal-title-row{display:flex;align-items:center;justify-content:flex-start;gap:8px;margin-bottom:16px;}
+  .modal-title-row h2{font-size:16px;margin:0;min-width:0;}
+  .modal-add-set-btn{width:38px;height:38px;min-width:38px;padding:0;border-radius:10px;font-size:21px;line-height:1;display:flex;align-items:center;justify-content:center;}
   .modal-close-row{display:flex;justify-content:flex-end;margin-bottom:-6px;}
+  .bulk-set-list{display:flex;flex-direction:column;gap:10px;margin-bottom:10px;}
+  .bulk-set-row{display:grid;grid-template-columns:62px 1fr 1fr 38px;gap:8px;align-items:end;background:var(--surface2);border-radius:9px;padding:10px;}
+  .bulk-set-row .field-label{margin-bottom:4px;}
+  .bulk-set-row input{width:100%;}
+  .bulk-set-row .bulk-remove{height:42px;width:38px;padding:0;display:flex;align-items:center;justify-content:center;}
+  @media(max-width:420px){
+    .bulk-set-row{grid-template-columns:56px 1fr 1fr 38px;gap:7px;padding:9px;}
+    .bulk-set-row input{font-size:15px;}
+  }
 
   .archive-item{padding:12px 0;border-bottom:1px solid var(--border);}
   .archive-item:last-child{border-bottom:none;}
@@ -1053,51 +1077,126 @@ function openSetModal(exerciseId, editSetId){
   const editSet = editSetId ? DB.sets.find(s=>s.id===editSetId) : null;
   const date = editSet ? editSet.date : (state.logDate || todayStr());
   const existingOnDate = setsOfExercise(exerciseId).filter(s=>s.date===date && s.id!==editSetId);
-  // Auto-suggest the next set number as a simple count of sets already logged for this exercise
-  // on this date (0 sets -> 1, 2 sets -> 3, etc). Still just a default; the field stays editable.
-  const nextSetNum = editSet ? editSet.setNumber : existingOnDate.length + 1;
+  const existingNumbers = existingOnDate.map(s=>Number(s.setNumber)||0);
+  const highestExistingSetNum = existingNumbers.length ? Math.max(...existingNumbers) : 0;
+  const nextSetNum = editSet ? editSet.setNumber : highestExistingSetNum + 1;
   const lastSet = editSet ? null : setsOfExercise(exerciseId).slice(-1)[0];
+  const initialRows = [{
+    id: editSet ? editSet.id : null,
+    setNumber: nextSetNum,
+    weight: editSet ? editSet.weight : (lastSet ? lastSet.weight : ''),
+    reps: editSet ? editSet.reps : (lastSet ? lastSet.reps : '')
+  }];
 
   $modalRoot.innerHTML = `
     <div class="modal-overlay" id="m-overlay">
       <div class="modal-sheet">
-        <div class="modal-close-row"><button class="icon-btn" id="m-close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button></div>
-        <h2>${editSet ? 'Edit set &middot; ' : ''}${esc(ex.name)}</h2>
-        <div class="field-grid3">
-          <div class="field"><label class="field-label">Set #</label><input type="number" id="m-setnum" value="${editSet?editSet.setNumber:nextSetNum}" min="1"></div>
-          <div class="field"><label class="field-label">Weight (kg)</label><input type="number" id="m-weight" step="0.5" value="${editSet?editSet.weight:(lastSet?lastSet.weight:'')}" placeholder="0"></div>
-          <div class="field"><label class="field-label">Reps</label><input type="number" id="m-reps" value="${editSet?editSet.reps:(lastSet?lastSet.reps:'')}" placeholder="0"></div>
+        <div class="modal-close-row"><button class="icon-btn" id="m-close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button></div>
+        <div class="modal-title-row">
+          <h2>${editSet ? 'Edit set &middot; ' : ''}${esc(ex.name)}</h2>
+          <button type="button" class="btn btn-ghost modal-add-set-btn" id="m-add-set" aria-label="Add another set" title="Add another set">+</button>
         </div>
+        <div id="m-set-list" class="bulk-set-list"></div>
         <div class="field">
           <label class="field-label">Date</label>
           <input type="date" id="m-date" value="${date}">
         </div>
         <div id="m-err" style="color:var(--rust);font-size:12.5px;margin-bottom:10px;display:none;"></div>
-        <button class="btn btn-accent btn-block" id="m-save">${editSet ? 'Save changes' : 'Save set'}</button>
+        <button class="btn btn-accent btn-block" id="m-save">${editSet ? 'Save changes' : 'Save sets'}</button>
         ${editSet ? `<button class="btn btn-danger btn-block" id="m-delete" style="margin-top:8px;">Delete set</button>` : ''}
       </div>
     </div>`;
+
+  const listEl = document.getElementById('m-set-list');
+  let rows = initialRows.slice();
+
+  function nextAvailableSetNumber(){
+    // Set numbers are scoped to the exercise + selected date, not the entire history.
+    // This keeps a new day's first added set at #1, then #2, #3, etc.
+    const currentDate = document.getElementById('m-date')?.value || date;
+    const nums = [
+      ...setsOfExercise(exerciseId)
+        .filter(s=>s.date===currentDate && (!editSetId || s.id!==editSetId))
+        .map(s=>Number(s.setNumber)||0),
+      ...rows.map(r=>Number(r.setNumber)||0)
+    ];
+    return (nums.length ? Math.max(...nums) : 0) + 1;
+  }
+
+  function renderSetRows(){
+    listEl.innerHTML = rows.map((r,i)=>`
+      <div class="bulk-set-row" data-row-index="${i}">
+        <div class="field"><label class="field-label">Set #</label><input type="number" class="m-row-setnum" value="${r.setNumber}" min="1" inputmode="numeric"></div>
+        <div class="field"><label class="field-label">Weight (kg)</label><input type="number" class="m-row-weight" step="0.5" value="${r.weight}" placeholder="0" inputmode="decimal"></div>
+        <div class="field"><label class="field-label">Reps</label><input type="number" class="m-row-reps" value="${r.reps}" placeholder="0" min="1" inputmode="numeric"></div>
+        <button type="button" class="icon-btn bulk-remove" data-remove-row="${i}" aria-label="Remove set" title="Remove set"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button>
+      </div>`).join('');
+
+    listEl.querySelectorAll('.m-row-setnum,.m-row-weight,.m-row-reps').forEach(inp=>inp.oninput=()=>{
+      const row=inp.closest('.bulk-set-row'); const i=Number(row.dataset.rowIndex);
+      const r=rows[i];
+      r.setNumber=parseInt(row.querySelector('.m-row-setnum').value)||'';
+      r.weight=row.querySelector('.m-row-weight').value===''?'':parseFloat(row.querySelector('.m-row-weight').value);
+      r.reps=row.querySelector('.m-row-reps').value===''?'':parseInt(row.querySelector('.m-row-reps').value);
+    });
+    listEl.querySelectorAll('[data-remove-row]').forEach(btn=>btn.onclick=()=>{
+      if(rows.length===1){
+        toast('At least one set is required');
+        return;
+      }
+      rows.splice(Number(btn.dataset.removeRow),1);
+      renderSetRows();
+    });
+  }
+
+  renderSetRows();
   document.getElementById('m-close').onclick = closeModal;
   document.getElementById('m-overlay').onclick = e=>{ if(e.target.id==='m-overlay') closeModal(); };
+  document.getElementById('m-add-set').onclick = ()=>{
+    rows.push({id:null,setNumber:nextAvailableSetNumber(),weight:rows.length?rows[rows.length-1].weight:(lastSet?lastSet.weight:''),reps:rows.length?rows[rows.length-1].reps:(lastSet?lastSet.reps:'')});
+    renderSetRows();
+    const inputs=listEl.querySelectorAll('.m-row-weight');
+    if(inputs.length) inputs[inputs.length-1].focus();
+  };
+
   document.getElementById('m-save').onclick = async ()=>{
-    const setNumber = parseInt(document.getElementById('m-setnum').value);
-    const weight = parseFloat(document.getElementById('m-weight').value);
-    const reps = parseInt(document.getElementById('m-reps').value);
+    // Sync the current inputs before validating/saving.
+    listEl.querySelectorAll('.bulk-set-row').forEach((row,i)=>{
+      rows[i].setNumber=parseInt(row.querySelector('.m-row-setnum').value)||0;
+      rows[i].weight=row.querySelector('.m-row-weight').value===''?NaN:parseFloat(row.querySelector('.m-row-weight').value);
+      rows[i].reps=row.querySelector('.m-row-reps').value===''?NaN:parseInt(row.querySelector('.m-row-reps').value);
+    });
     const d = document.getElementById('m-date').value;
     const errEl = document.getElementById('m-err');
-    if(!setNumber || setNumber<1 || isNaN(weight) || weight<0 || !reps || reps<1 || !d){
-      errEl.textContent = 'Fill in a valid set number, weight, reps, and date.';
+    const invalid = rows.some(r=>!r.setNumber || r.setNumber<1 || !Number.isFinite(r.weight) || r.weight<0 || !r.reps || r.reps<1);
+    const numbers = rows.map(r=>r.setNumber);
+    const duplicateNumbers = numbers.some((n,i)=>numbers.indexOf(n)!==i);
+    const takenNumbers = new Set(setsOfExercise(exerciseId).filter(s=>s.date===d && (!editSetId || s.id!==editSetId)).map(s=>Number(s.setNumber)));
+    const clashes = numbers.some(n=>takenNumbers.has(n));
+    if(invalid || !d){
+      errEl.textContent = 'Fill in a valid set number, weight, reps, and date for every set.';
       errEl.style.display='block'; return;
     }
+    if(duplicateNumbers || clashes){
+      errEl.textContent = 'Each set number must be unique for this exercise and date.';
+      errEl.style.display='block'; return;
+    }
+
     if(editSet){
-      editSet.setNumber = setNumber; editSet.weight = weight; editSet.reps = reps; editSet.date = d;
+      const first = rows[0];
+      editSet.setNumber = first.setNumber; editSet.weight = first.weight; editSet.reps = first.reps; editSet.date = d;
+      for(let i=1;i<rows.length;i++){
+        const r=rows[i];
+        DB.sets.push({id:uid('set'),exerciseId,setNumber:r.setNumber,date:d,weight:r.weight,reps:r.reps,createdAt:new Date().toISOString()});
+      }
     } else {
-      DB.sets.push({ id:uid('set'), exerciseId, setNumber, date:d, weight, reps, createdAt:new Date().toISOString() });
+      rows.forEach(r=>DB.sets.push({id:uid('set'),exerciseId,setNumber:r.setNumber,date:d,weight:r.weight,reps:r.reps,createdAt:new Date().toISOString()}));
     }
     await save('sets');
-    state.logDate = d; // keep logging against whatever date was used, until changed back
-    closeModal(); render(); toast(editSet ? 'Set updated' : 'Set logged');
+    state.logDate = d;
+    closeModal(); render(); toast(editSet ? (rows.length>1 ? `${rows.length} sets saved` : 'Set updated') : `${rows.length} ${rows.length===1?'set':'sets'} logged`);
   };
+
   const delBtn = document.getElementById('m-delete');
   if(delBtn) delBtn.onclick = async ()=>{
     DB.sets = DB.sets.filter(s=>s.id!==editSet.id);
@@ -1433,7 +1532,196 @@ function renderProgress(){
     return;
   }
 
-  // ---- stats ----
+  // ---- progressive-overload trend ----
+  // Progress is tracked at the same weight. A session contributes its best
+  // reps at that weight, and the baseline is the median of the four most
+  // recent qualifying sessions before the current session.
+  function median4(values){
+    const a = values.slice().sort((x,y)=>x-y);
+    if(!a.length) return null;
+    const m=Math.floor(a.length/2);
+    return a.length%2 ? a[m] : (a[m-1]+a[m])/2;
+  }
+  function fmtRepValue(v){ return Number.isInteger(v) ? String(v) : Number(v).toFixed(1); }
+  function buildProgressiveOverloadTrend(exerciseSets){
+    const grouped={};
+    exerciseSets.forEach(s=>{
+      const d=s.date;
+      const w=Number(s.weight);
+      const r=Number(s.reps);
+      if(!Number.isFinite(w)||!Number.isFinite(r)) return;
+      if(!grouped[d]) grouped[d]=[];
+      grouped[d].push({weight:w,reps:r});
+    });
+
+    const dates=Object.keys(grouped).sort();
+    if(!dates.length) return {status:'insufficient',title:'Building baseline',note:'Log more sessions to establish a same-weight performance baseline.',html:'&mdash;'};
+
+    const latestDate=dates[dates.length-1];
+    const latestSets=grouped[latestDate];
+    const currentWeight=Math.max(...latestSets.map(s=>s.weight));
+    const currentAtWeight=latestSets.filter(s=>s.weight===currentWeight);
+
+    // The current session is represented by the median reps across every
+    // set performed at the tracked weight. This works for 2, 3, 4, 5, etc.
+    // sets and prevents one unusually strong final set from masking a dip.
+    const currentReps=median4(currentAtWeight.map(s=>s.reps));
+    const currentSetCount=currentAtWeight.length;
+    const currentBestReps=Math.max(...currentAtWeight.map(s=>s.reps));
+
+    // A genuinely new load is positive progression when it is performed
+    // for more than a single rep. This is treated separately from the
+    // same-weight baseline system because there is no same-weight baseline
+    // to compare against yet.
+    const previousWeights=dates.slice(0,-1).flatMap(date=>grouped[date].map(s=>s.weight));
+    const previousMaxWeight=previousWeights.length ? Math.max(...previousWeights) : null;
+    const isNewWeight=previousMaxWeight!=null && currentWeight>previousMaxWeight;
+    const newWeightPositive=isNewWeight && currentReps>1;
+
+    const sessionSummary = currentSetCount > 1
+      ? `Session: ${currentSetCount} sets &middot; Median: ${fmtRepValue(currentReps)} reps${currentBestReps!==currentReps ? ` &middot; Best: ${fmtRepValue(currentBestReps)} reps` : ''}`
+      : `Session: 1 set &middot; ${fmtRepValue(currentReps)} reps`;
+
+    // Only compare sessions performed at the exact same weight. A weight
+    // change therefore starts a fresh progression track automatically.
+    // A new weight with more than one rep is an immediate positive result.
+    // Do not wait for four same-weight sessions to establish a baseline.
+    if(newWeightPositive){
+      return {
+        status:'new-weight',
+        statusClass:'trend-up',
+        title:'Positive progression',
+        note:`New load achieved at ${fmtRepValue(currentWeight)} kg with a session median above 1 rep. This represents positive progression.`,
+        currentWeight,currentReps,currentBestReps,currentSetCount,
+        baseline:null,prior:[],latestDate,followups:0,confirms:0,diff:null,signed:null,
+        html:`<span class="trend-up">&uarr; Positive</span>`
+      };
+    }
+
+    const rows=dates.map(date=>{
+      const atWeight=grouped[date].filter(s=>s.weight===currentWeight);
+      if(!atWeight.length) return null;
+      return {
+        date,
+        reps:median4(atWeight.map(s=>s.reps)),
+        bestReps:Math.max(...atWeight.map(s=>s.reps)),
+        setCount:atWeight.length
+      };
+    }).filter(Boolean);
+
+    const prior=rows.filter(r=>r.date!==latestDate).slice(-4);
+    if(prior.length<4){
+      return {
+        status:'insufficient',
+        title:'Building baseline',
+        note:`Need ${4-prior.length} more same-weight session${4-prior.length===1?'':'s'} to establish the baseline.`,
+        currentWeight,currentReps,currentBestReps,currentSetCount,prior,latestDate,
+        html:`<span style="color:var(--text-dim);">Building baseline</span>`
+      };
+    }
+
+    const baseline=median4(prior.map(r=>r.reps));
+    const diff=currentReps-baseline;
+    const signed=diff>0?`+${fmtRepValue(diff)}`:diff<0?fmtRepValue(diff):'0';
+
+    // Detect the start of the most recent underperformance streak. The
+    // baseline is anchored to the four sessions immediately BEFORE the
+    // first below-baseline session, then frozen for the three-session watch
+    // window. This prevents later below-baseline sessions from becoming part
+    // of a new rolling baseline and incorrectly lowering the benchmark.
+    let recentWatch=null;
+    for(let i=4;i<rows.length;i++){
+      const b=median4(rows.slice(i-4,i).map(r=>r.reps));
+      if(rows[i].reps<b){
+        const previous=rows[i-1];
+        const startsNewDip = !previous || previous.reps>=b;
+        if(startsNewDip){
+          const followups=rows.slice(i+1,i+4);
+          recentWatch={index:i,baseline:b,followups};
+        }
+      }
+    }
+
+    let status='maintained';
+    let title='Maintained';
+    let note='Session performance is in line with the recent baseline.';
+    let statusClass='';
+    let followups=0;
+    let confirms=0;
+
+    // If the latest session is a follow-up to a prior underperformance,
+    // explicitly report recovery/persistence before treating it as a new event.
+    if(recentWatch){
+      const latestIsFollowup=recentWatch.followups.some(r=>r.date===latestDate);
+      if(latestIsFollowup){
+        const seen=recentWatch.followups.filter(r=>r.date<=latestDate);
+        const recovered=seen.some(r=>r.reps>=recentWatch.baseline);
+        if(recovered){
+          status='recovered';
+          title='Recovered';
+          statusClass='trend-up';
+          note=`Returned to at least the ${fmtRepValue(recentWatch.baseline)}-rep baseline after the earlier dip. No regression is recorded.`;
+          return {status,statusClass,title,note:`${note}|${sessionSummary}`,currentWeight,currentReps,currentBestReps,currentSetCount,baseline,prior,latestDate,followups:seen.length,confirms,diff,signed,
+            html:`<span class="trend-up">&uarr; Recovered</span>`};
+        }
+        if(seen.length>=3){
+          status='persistent';
+          title='Persistent underperformance';
+          statusClass='trend-down';
+          note=`The last 3 follow-up sessions stayed below the ${fmtRepValue(recentWatch.baseline)}-rep baseline. Consider this a persistent dip at this weight.`;
+          return {status,statusClass,title,note:`${note}|${sessionSummary}`,currentWeight,currentReps,currentBestReps,currentSetCount,baseline,prior,latestDate,followups:3,confirms,diff,signed,
+            html:`<span class="trend-down">&darr; Persistent</span>`};
+        }
+        if(currentReps<baseline){
+          status='watch';
+          title='Performance watch';
+          statusClass='trend-down';
+          followups=seen.length;
+          note=`Below baseline. Monitoring follow-up ${seen.length} of 3 at this weight.`;
+          return {status,statusClass,title,note:`${note}|${sessionSummary}`,currentWeight,currentReps,currentBestReps,currentSetCount,baseline,prior,latestDate,followups,confirms,diff,signed,
+            html:`<span class="trend-down">&darr; Monitoring ${seen.length}/3</span>`};
+        }
+      }
+    }
+
+    if(currentReps>baseline){
+      // A higher session median is an improvement, but it is not allowed to
+      // replace the established baseline until three sessions confirm it.
+      confirms=1;
+      const previousRows=rows.filter(r=>r.date!==latestDate).slice(-3);
+      for(let i=previousRows.length-1;i>=0;i--){
+        if(previousRows[i].reps>=currentReps) confirms++;
+        else break;
+      }
+      if(confirms>=3){
+        status='confirmed';
+        title='New level confirmed';
+        statusClass='trend-up';
+        note=`${confirms} recent sessions support ${currentWeight}kg &times; ${fmtRepValue(currentReps)}. The new level is now confirmed.`;
+      }else{
+        status='improved';
+        title='Improved';
+        statusClass='trend-up';
+        note=`Session median is above the baseline. Keep tracking it for ${3-confirms} more confirming session${3-confirms===1?'':'s'} before rebuilding the baseline.`;
+      }
+    }else if(currentReps<baseline){
+      status='watch';
+      title='Performance watch';
+      statusClass='trend-down';
+      note=`Below the established baseline. Performance will be monitored across the next 3 same-weight sessions before identifying a regression.`;
+      followups=0;
+    }
+
+    note = `${note}|${sessionSummary}`;
+
+    return {
+      status,statusClass,title,note,currentWeight,currentReps,currentBestReps,currentSetCount,
+      baseline,prior,latestDate,followups,confirms,diff,signed,
+      html:`<span class="${statusClass}">${status==='watch'?'&darr; Monitoring':status==='maintained'?'&rarr; 0 reps':'&uarr; '+signed+' reps'}</span>`
+    };
+  }
+
+// ---- stats ----
   const weights = sets.map(s=>s.weight);
   const prWeight = Math.max(...weights);
   const setsAtPrWeight = sets.filter(s=>s.weight===prWeight);
@@ -1456,6 +1744,7 @@ function renderProgress(){
     else if(diff<0) trendHtml = `<span class="trend-down">&darr; ${diff}kg</span> vs last session`;
     else trendHtml = `<span style="color:var(--text-dim);">&rarr; same</span> as last session`;
   }
+  const overload = buildProgressiveOverloadTrend(sets);
 
   html += `<div class="card">
     <div class="card-title">Snapshot</div>
@@ -1480,6 +1769,24 @@ function renderProgress(){
         <div class="value" style="font-size:14px;">${trendHtml || '&mdash;'}</div>
       </div>
     </div>
+  </div>`;
+
+  // ---- progressive overload ----
+  html += `<div class="card overload-card">
+    <div class="card-title">Progressive overload</div>
+    <div class="overload-main">
+      <div>
+        <div class="overload-kicker">Same-weight performance</div>
+        <div class="overload-title">${overload.currentWeight!=null ? `${fmtRepValue(overload.currentWeight)} kg &times; ${fmtRepValue(overload.currentReps)} reps` : 'Building baseline'}</div>
+      </div>
+      <div class="overload-status ${overload.statusClass||''}">${overload.title||'Building baseline'}</div>
+    </div>
+    ${overload.baseline!=null ? `<div class="overload-detail">
+      <div class="overload-chip">Baseline: ${fmtRepValue(overload.currentWeight)} kg &times; ${fmtRepValue(overload.baseline)} reps</div>
+      <div class="overload-chip">Latest: ${fmtRepValue(overload.currentWeight)} kg &times; ${fmtRepValue(overload.currentReps)} reps</div>
+    </div>` : ''}
+    ${overload.status==='watch' ? `<div class="overload-progress"><span style="width:${Math.min(100,((overload.followups||0)/3)*100)}%"></span></div>` : ''}
+    <div class="overload-note">${String(overload.note||'').split('|').map((part,i)=>i===0 ? `<div class="overload-note-main">${part}</div>` : `<div class="overload-note-meta">${part}</div>`).join('')}</div>
   </div>`;
 
   // ---- metric toggle + line chart (top weight & volume per session) ----
