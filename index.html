@@ -161,7 +161,8 @@
 
   .day-chip{padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);
     font-family:var(--font-display);font-size:13px;letter-spacing:0.03em;text-transform:uppercase;color:var(--text-dim);
-    white-space:nowrap;}
+    white-space:nowrap;touch-action:manipulation;user-select:none;-webkit-user-select:none;}
+  .day-chip.press-armed{background:var(--surface2);transform:scale(0.98);}
   .day-chip.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
   .day-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px;}
 
@@ -630,6 +631,42 @@ function openSplitModal(existingSplit){
 
 function closeModal(){ $modalRoot.innerHTML=''; }
 
+// Rename a training day directly from the Log tab. The day name lives on the split's
+// day record, so changing it here updates every view that reads that day (including
+// Split and any future references) while preserving the same day ID and all history.
+function openDayRenameModal(splitId, dayId){
+  const split = splitById(splitId);
+  const day = split && split.days.find(d=>d.id===dayId);
+  if(!split || !day) return;
+
+  const html = `
+    <div class="modal-sheet">
+      <div class="modal-close-row"><button class="icon-btn" id="m-close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button></div>
+      <h2 style="font-size:16px;margin-bottom:16px;">Rename day</h2>
+      <div class="field">
+        <label class="field-label">Day name</label>
+        <input type="text" id="m-dayname" placeholder="e.g. Push, Pull, Legs" value="${esc(day.name)}" maxlength="40">
+      </div>
+      <button class="btn btn-accent btn-block" id="m-save">Save name</button>
+    </div>`;
+
+  $modalRoot.innerHTML = `<div class="modal-overlay" id="m-overlay">${html}</div>`;
+  const input = document.getElementById('m-dayname');
+  const close = ()=>closeModal();
+  document.getElementById('m-close').onclick = close;
+  document.getElementById('m-overlay').onclick = e=>{ if(e.target.id==='m-overlay') close(); };
+  document.getElementById('m-save').onclick = async ()=>{
+    const name = input.value.trim();
+    if(!name){ toast('Give the day a name'); input.focus(); return; }
+    day.name = name;
+    await save('splits');
+    closeModal();
+    render();
+    toast('Day renamed');
+  };
+  requestAnimationFrame(()=>{ input.focus(); input.select(); });
+}
+
 // Swap which split is "active" (the one Log tab logs against). The split being promoted
 // keeps its own createdAt/history; the previously-active split is archived, not deleted.
 async function switchToSplit(splitId){
@@ -1052,7 +1089,45 @@ function renderLog(){
   }
 
   $main.innerHTML = html;
-  document.querySelectorAll('[data-day]').forEach(b=> b.onclick = ()=>{ state.logDayId=b.dataset.day; render(); });
+  document.querySelectorAll('[data-day]').forEach(b=>{
+    let timer = null;
+    let longPressed = false;
+    let startX = 0, startY = 0;
+
+    const clearPress = ()=>{
+      if(timer){ clearTimeout(timer); timer=null; }
+      b.classList.remove('press-armed');
+    };
+
+    b.addEventListener('pointerdown', e=>{
+      if(e.pointerType === 'mouse' && e.button !== 0) return;
+      longPressed = false;
+      startX = e.clientX; startY = e.clientY;
+      b.classList.add('press-armed');
+      timer = setTimeout(()=>{
+        timer = null;
+        longPressed = true;
+        b.classList.remove('press-armed');
+        openDayRenameModal(split.id, b.dataset.day);
+      }, 650);
+    });
+
+    b.addEventListener('pointermove', e=>{
+      if(!timer) return;
+      if(Math.hypot(e.clientX-startX, e.clientY-startY) > 10) clearPress();
+    });
+
+    b.addEventListener('pointerup', e=>{
+      const wasLong = longPressed;
+      clearPress();
+      if(!wasLong) { state.logDayId=b.dataset.day; render(); }
+    });
+    b.addEventListener('pointercancel', clearPress);
+    b.addEventListener('pointerleave', e=>{
+      if(e.pointerType === 'mouse') clearPress();
+    });
+    b.addEventListener('contextmenu', e=> e.preventDefault());
+  });
   const a1=document.getElementById('log-addex'), a2=document.getElementById('log-addex2');
   if(a1) a1.onclick = ()=>openExerciseModal(split.id, state.logDayId);
   if(a2) a2.onclick = ()=>openExerciseModal(split.id, state.logDayId);
