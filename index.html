@@ -572,6 +572,41 @@ function allLoggedSessions(){
 function sessionsForDay(dayId){ return allLoggedSessions().filter(s=>s.dayId===dayId); }
 function sessionByDate(date){ return allLoggedSessions().find(s=>s.date===date) || null; }
 
+// History for the currently selected Log day must be scoped to that exact day.
+// A calendar date can contain more than one split day, so we intentionally
+// group only sets belonging to the requested day instead of using the
+// date-level session grouping above. This keeps Upper 1 history separate from
+// Lower 1 history even when both were logged on the same date.
+let _dayHistoryCache = new Map();
+function historySessionsForDay(dayId){
+  if(!dayId) return [];
+  const cacheKey = dayId + '|' + DB.sets.length + '|' + DB.exercises.length;
+  const cached = _dayHistoryCache.get(dayId);
+  if(cached && cached.key===cacheKey) return cached.sessions;
+
+  const byDate = {};
+  DB.sets.forEach(s=>{
+    const ex = exerciseById(s.exerciseId);
+    if(!ex || ex.dayId!==dayId) return;
+    (byDate[s.date]=byDate[s.date]||[]).push(s);
+  });
+
+  const day = dayById(dayId);
+  const sessions = Object.keys(byDate).sort().map(date=>{
+    const daySets = byDate[date];
+    const exIds = [...new Set(daySets.map(s=>s.exerciseId))];
+    const exercises = exIds.map(id=>exerciseById(id)).filter(Boolean);
+    const volume = daySets.reduce((a,s)=>a+s.weight*s.reps,0);
+    return {
+      date, dayId, dayName: day ? day.name : 'Session', exercises,
+      sets: daySets.slice().sort((a,b)=>a.setNumber-b.setNumber || (a.exerciseId<b.exerciseId?-1:1)),
+      volume, setCount:daySets.length, repCount:daySets.reduce((a,s)=>a+s.reps,0)
+    };
+  });
+  _dayHistoryCache.set(dayId, {key:cacheKey, sessions});
+  return sessions;
+}
+
 /* ============ SMART NEXT-SESSION DEFAULT ============ */
 // Runs once per calendar date (guarded by DB_META.lastAutoAssignDate) at app start.
 // It only sets a sensible *default* day for today's Log view — it never touches
@@ -1401,12 +1436,16 @@ function renderLog(){
 
 /* ============ PREVIOUS SESSIONS CARD (Log tab) ============ */
 function buildHistoryCardHtml(){
-  const sessions = allLoggedSessions(); // ascending by date
+  // IMPORTANT: Previous Session is scoped to the day currently selected in
+  // the Log tab (e.g. Upper 1 shows only Upper 1 history; Lower 1 shows only
+  // Lower 1 history).
+  const sessions = historySessionsForDay(state.logDayId); // ascending by date
   if(!sessions.length){
+    state.logHistoryDate = null;
     return `<div class="card history-card">
       <button type="button" class="history-toggle" id="history-toggle" aria-expanded="false">
         <span class="history-toggle-label">Previous session</span>
-        <span class="history-toggle-center"><span class="history-toggle-day">No sessions yet</span></span>
+        <span class="history-toggle-center"><span class="history-toggle-day">No ${esc(dayById(state.logDayId)?.name || 'day')} history yet</span></span>
         <span class="history-toggle-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
       </button>
     </div>`;
@@ -1475,20 +1514,21 @@ function bindHistoryCard(){
   };
 
   if(prev) prev.onclick = ()=>{
-    const sessions = allLoggedSessions();
+    const sessions = historySessionsForDay(state.logDayId);
     const idx = sessions.findIndex(s=>s.date===state.logHistoryDate);
     if(idx>0){ state.logHistoryDate = sessions[idx-1].date; renderLog(); }
   };
   if(next) next.onclick = ()=>{
-    const sessions = allLoggedSessions();
+    const sessions = historySessionsForDay(state.logDayId);
     const idx = sessions.findIndex(s=>s.date===state.logHistoryDate);
     if(idx<sessions.length-1){ state.logHistoryDate = sessions[idx+1].date; renderLog(); }
   };
   if(jump) jump.onclick = ()=>{
-    const session = sessionByDate(state.logHistoryDate);
+    const sessions = historySessionsForDay(state.logDayId);
+    const session = sessions.find(s=>s.date===state.logHistoryDate);
     if(!session) return;
     state.logDate = session.date;
-    if(session.dayId && activeSplit() && activeSplit().days.some(d=>d.id===session.dayId)) state.logDayId = session.dayId;
+    state.logDayId = session.dayId;
     state.logHistoryOpen = false;
     render();
   };
