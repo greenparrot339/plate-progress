@@ -245,6 +245,97 @@
     background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 16px;border-radius:20px;
     font-size:13px;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.2s;}
   .toast.show{opacity:1;}
+
+  /* ===== Previous Sessions (Log tab) ===== */
+  .history-card{padding:0;overflow:hidden;}
+  .history-toggle{width:100%;display:flex;align-items:center;gap:10px;padding:12px 14px;background:none;border:0;color:var(--text);text-align:left;cursor:pointer;touch-action:manipulation;}
+  .history-toggle:active{background:var(--surface2);}
+  .history-toggle-label{font-family:var(--font-display);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);flex-shrink:0;}
+  .history-toggle-center{flex:1;min-width:0;display:flex;align-items:baseline;justify-content:center;gap:7px;}
+  .history-toggle-date{font-family:var(--font-display);font-size:13px;letter-spacing:.03em;text-transform:uppercase;color:var(--text);white-space:nowrap;}
+  .history-toggle-day{font-size:10.5px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .history-toggle-meta{font-family:var(--font-mono);font-size:10px;color:var(--text-faint);white-space:nowrap;}
+  .history-toggle-chevron{width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text-faint);transition:transform .24s cubic-bezier(.32,.72,.35,1),color .18s ease;}
+  .history-toggle-chevron svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .history-card.is-open .history-toggle-chevron{transform:rotate(90deg);color:var(--accent);}
+  .history-details{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s cubic-bezier(.32,.72,.35,1);}
+  .history-card.is-open .history-details{grid-template-rows:1fr;}
+  .history-details-inner{min-height:0;overflow:hidden;padding:0 14px;opacity:0;transform:translateY(-5px);transition:opacity .18s ease,transform .28s cubic-bezier(.32,.72,.35,1),padding-bottom .28s ease;}
+  .history-card.is-open .history-details-inner{padding-bottom:14px;opacity:1;transform:translateY(0);}
+  .history-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;margin-bottom:10px;border-top:1px solid var(--border);}
+  .history-navbtn{background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);border-radius:8px;
+    width:34px;height:34px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .history-navbtn:disabled{opacity:0.35;}
+  .history-navbtn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;}
+  .history-center{flex:1;text-align:center;min-width:0;}
+  .history-date{font-family:var(--font-display);font-size:14px;letter-spacing:0.03em;text-transform:uppercase;color:var(--text);}
+  .history-dayname{font-size:11px;color:var(--text-faint);margin-top:1px;}
+  .history-body{border-top:1px solid var(--border);padding-top:10px;margin-top:2px;}
+  .history-exrow{display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:12.5px;}
+  .history-exrow .hx-name{color:var(--text-dim);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .history-exrow .hx-sets{font-family:var(--font-mono);color:var(--text);flex-shrink:0;text-align:right;}
+  .history-summary{display:flex;gap:14px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+  .history-summary .hs-item{flex:1;}
+  .history-summary .hs-label{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;}
+  .history-summary .hs-value{font-family:var(--font-mono);font-size:15px;font-weight:600;margin-top:2px;}
+  .history-jump{width:100%;margin-top:12px;}
+  .history-empty{text-align:center;color:var(--text-faint);font-size:12.5px;padding:12px 0 14px;}
+
+  /* ===== Exercise rename (Log tab long-press) ===== */
+  .log-exname{display:inline-block;touch-action:manipulation;user-select:none;-webkit-user-select:none;border-radius:6px;transition:background .12s ease;}
+  .log-exname.press-armed{background:var(--surface2);}
+  .exname-badge{display:inline-block;margin-left:6px;font-size:9.5px;font-family:var(--font-body);letter-spacing:.04em;
+    color:var(--text-faint);text-transform:uppercase;border:1px solid var(--border);border-radius:8px;padding:1px 6px;vertical-align:middle;}
+
+  /* ===== Progress: mode switcher (\"orbit\") ===== */
+  .progress-modes-card{padding:12px 12px 10px;}
+  .progress-modes{display:flex;gap:8px;}
+  .progress-modes button{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);
+    border-radius:10px;padding:11px 6px 9px;font-family:var(--font-display);font-size:11.5px;letter-spacing:.06em;
+    text-transform:uppercase;display:flex;flex-direction:column;align-items:center;gap:5px;
+    transition:transform .16s cubic-bezier(.32,.72,.35,1), background .16s ease, border-color .16s ease, color .16s ease;}
+  .progress-modes button svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;}
+  .progress-modes button.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);transform:translateY(-2px);}
+  .progress-orbit-dots{display:flex;justify-content:center;gap:5px;margin-top:9px;}
+  .progress-orbit-dots .od{width:5px;height:5px;border-radius:50%;background:var(--border);transition:background .16s ease, width .16s ease;}
+  .progress-orbit-dots .od.hot{background:var(--accent);width:14px;border-radius:3px;}
+
+  /* ===== Progress: Day report ===== */
+  .muscle-bar-row{display:flex;align-items:center;gap:9px;padding:5px 0;}
+  .muscle-bar-row .mb-label{width:70px;flex-shrink:0;font-size:11px;color:var(--text-dim);font-family:var(--font-display);letter-spacing:.04em;text-transform:uppercase;}
+  .muscle-bar-track{flex:1;height:7px;background:var(--surface2);border-radius:4px;overflow:hidden;}
+  .muscle-bar-fill{height:100%;background:var(--accent);border-radius:4px;}
+  .muscle-bar-val{width:52px;flex-shrink:0;text-align:right;font-family:var(--font-mono);font-size:11px;color:var(--text-faint);}
+
+  .score-ring-row{display:flex;align-items:center;gap:16px;}
+  .score-ring{position:relative;width:78px;height:78px;flex-shrink:0;}
+  .score-ring svg{width:100%;height:100%;transform:rotate(-90deg);}
+  .score-ring .ring-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-mono);font-size:20px;font-weight:700;}
+  .score-components{flex:1;display:flex;flex-direction:column;gap:6px;}
+  .score-comp-row{display:flex;justify-content:space-between;font-size:11.5px;color:var(--text-dim);}
+  .score-comp-row b{color:var(--text);font-family:var(--font-mono);}
+
+  .compare-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);}
+  .compare-row:last-child{border-bottom:none;}
+  .compare-row .cr-label{font-size:12.5px;color:var(--text-dim);}
+  .compare-row .cr-val{font-family:var(--font-mono);font-size:13px;font-weight:600;}
+
+  /* ===== Progress: Split comparison ===== */
+  .split-vs-bar{display:flex;align-items:center;gap:10px;margin-bottom:2px;}
+  .split-vs-bar select{font-size:13px;}
+  .split-vs-x{font-family:var(--font-display);font-size:12px;color:var(--text-faint);flex-shrink:0;}
+  .split-metric-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
+  .split-metric-row:last-child{border-bottom:none;}
+  .split-metric-row .sm-label{width:96px;flex-shrink:0;font-size:11.5px;color:var(--text-faint);}
+  .split-metric-row .sm-a,.split-metric-row .sm-b{flex:1;font-family:var(--font-mono);font-size:14px;font-weight:600;text-align:center;}
+  .split-metric-row .sm-a{color:var(--accent);}
+  .split-metric-row .sm-b{color:var(--rust);}
+  .split-legend{display:flex;gap:16px;justify-content:center;margin:2px 0 10px;font-size:11.5px;}
+  .split-legend span{display:flex;align-items:center;gap:5px;color:var(--text-dim);}
+  .split-legend .dot{width:8px;height:8px;border-radius:50%;}
+  .shared-ex-chip-list,.uniq-ex-chip-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .ex-chip{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 10px;font-size:11.5px;color:var(--text-dim);}
 </style>
 </head>
 <body>
@@ -291,7 +382,8 @@
 <script>
 /* ============ STATE ============ */
 let DB = { splits: [], exercises: [], sets: [], exerciseClassificationOverrides: {} };
-let state = { tab:'log', logDayId:null, logExerciseId:null, logDate:null, splitEditId:null, splitViewId:null, progressSplitId:null, progressExerciseId:null, progressMetric:'weight', statsRange:'week', statsSelectedGroup:null, statsExpanded:false };
+let state = { tab:'log', logDayId:null, logExerciseId:null, logDate:null, logHistoryDate:null, logHistoryOpen:false, splitEditId:null, splitViewId:null, progressSplitId:null, progressExerciseId:null, progressMetric:'weight', progressMode:'exercise', progressDaySessionDate:null, progressSplitAId:null, progressSplitBId:null, progressSplitSharedKey:null, statsRange:'week', statsSelectedGroup:null, statsExpanded:false };
+let DB_META = { lastAutoAssignDate:null };
 let charts = {};
 const $main = document.getElementById('main');
 const $modalRoot = document.getElementById('modal-root');
@@ -377,8 +469,9 @@ function idbSet(key,value){
 async function loadAll(){
   try{
     await openDB();
-    const [s,e,st,ov]=await Promise.all([idbGet('splits'),idbGet('exercises'),idbGet('sets'),idbGet('exerciseClassificationOverrides')]);
+    const [s,e,st,ov,meta]=await Promise.all([idbGet('splits'),idbGet('exercises'),idbGet('sets'),idbGet('exerciseClassificationOverrides'),idbGet('appMeta')]);
     DB.splits=s||[]; DB.exercises=e||[]; DB.sets=st||[]; DB.exerciseClassificationOverrides=ov||{};
+    DB_META = meta || { lastAutoAssignDate:null };
     buildExerciseClassificationIndex();
     ensureExerciseOrder();
     if(ensureSplitDayHistory()) await idbSet('splits',DB.splits);
@@ -449,6 +542,70 @@ function exercisesOfDay(dayId){ return DB.exercises.filter(e=>e.dayId===dayId &&
 function allExercisesOfDay(dayId){ return DB.exercises.filter(e=>e.dayId===dayId).sort((a,b)=>(a.order||0)-(b.order||0)); }
 function setsOfExercise(exId){ return DB.sets.filter(s=>s.exerciseId===exId).sort((a,b)=> a.date===b.date ? a.setNumber-b.setNumber : (a.date<b.date?-1:1) ); }
 function exerciseById(id){ return DB.exercises.find(e=>e.id===id); }
+function dayById(dayId){ for(const sp of DB.splits){ const d=(sp.days||[]).find(x=>x.id===dayId); if(d) return d; } return null; }
+async function saveMeta(){ try{ await idbSet('appMeta', DB_META); }catch(err){ console.error('meta save failed',err); } }
+
+/* ============ LOGGED SESSIONS (real logged workouts, not split templates) ============ */
+// A "session" here means the actual logged data for a calendar date — grouping every
+// set that was logged on that date, regardless of which exercises/day they belong to.
+// This is intentionally distinct from a scheduled split-day template.
+let _sessionsCache = null, _sessionsCacheKey = null;
+function allLoggedSessions(){
+  const cacheKey = DB.sets.length + ':' + (DB.sets.length ? DB.sets[DB.sets.length-1].id : '') + ':' + DB.exercises.length;
+  if(_sessionsCache && _sessionsCacheKey===cacheKey) return _sessionsCache;
+  const byDate = {};
+  DB.sets.forEach(s=>{ (byDate[s.date]=byDate[s.date]||[]).push(s); });
+  const sessions = Object.keys(byDate).sort().map(date=>{
+    const daySets = byDate[date];
+    const dayCounts = {};
+    daySets.forEach(s=>{ const ex=exerciseById(s.exerciseId); if(ex) dayCounts[ex.dayId]=(dayCounts[ex.dayId]||0)+1; });
+    const dayId = Object.keys(dayCounts).sort((a,b)=>dayCounts[b]-dayCounts[a])[0] || null;
+    const day = dayId ? dayById(dayId) : null;
+    const exIds = [...new Set(daySets.map(s=>s.exerciseId))];
+    const exercises = exIds.map(id=>exerciseById(id)).filter(Boolean);
+    const volume = daySets.reduce((a,s)=>a+s.weight*s.reps,0);
+    return { date, dayId, dayName: day ? day.name : 'Session', exercises, sets:daySets.slice().sort((a,b)=>a.setNumber-b.setNumber || (a.exerciseId<b.exerciseId?-1:1)), volume, setCount:daySets.length, repCount:daySets.reduce((a,s)=>a+s.reps,0) };
+  });
+  _sessionsCache = sessions; _sessionsCacheKey = cacheKey;
+  return sessions;
+}
+function sessionsForDay(dayId){ return allLoggedSessions().filter(s=>s.dayId===dayId); }
+function sessionByDate(date){ return allLoggedSessions().find(s=>s.date===date) || null; }
+
+/* ============ SMART NEXT-SESSION DEFAULT ============ */
+// Runs once per calendar date (guarded by DB_META.lastAutoAssignDate) at app start.
+// It only sets a sensible *default* day for today's Log view — it never touches
+// logged history, never forces the date away from today, and any manual day
+// selection the user makes afterward is respected for the rest of the day
+// (this function won't run again until the next new calendar date).
+async function applySmartLogDefault(){
+  const today = todayStr();
+  if(DB_META.lastAutoAssignDate === today) return; // already applied today
+  DB_META.lastAutoAssignDate = today;
+  await saveMeta();
+
+  const split = activeSplit();
+  if(!split || !split.days || !split.days.length) return;
+
+  state.logDate = today;
+
+  const orderedDayIds = split.days.map(d=>d.id);
+  const sessions = allLoggedSessions().filter(s=> orderedDayIds.includes(s.dayId) && s.date <= today);
+  if(!sessions.length) return; // no history yet — leave default (first day)
+
+  const mostRecent = sessions[sessions.length-1]; // dates sorted ascending
+  if(mostRecent.date === today){
+    // Already logged something today — keep showing that day, don't jump ahead.
+    state.logDayId = mostRecent.dayId;
+    return;
+  }
+  // Nothing logged today yet: default to the day that follows the most recently
+  // logged day in the split's ordered day list (wrapping around).
+  const idx = orderedDayIds.indexOf(mostRecent.dayId);
+  if(idx === -1) return;
+  const nextDayId = orderedDayIds[(idx+1) % orderedDayIds.length];
+  state.logDayId = nextDayId;
+}
 
 /* ============ RENDER ROOT ============ */
 function setHeader(eyebrow, title, actionSvg, actionFn){
@@ -482,6 +639,7 @@ function goToTab(newTab){
   const newIdx = TAB_ORDER.indexOf(newTab);
   const forward = newIdx > oldIdx;
   if(state.tab==='stats') destroyStats3D();
+  if(state.tab==='progress') destroyCharts();
   tabSwitching = true;
   $main.classList.add(forward ? 'main-exit-left' : 'main-exit-right');
   setTimeout(()=>{
@@ -712,6 +870,62 @@ async function saveExerciseClassification(name, group){
   await save('exerciseClassificationOverrides');
 }
 
+/* ============ EXERCISE RENAME (long-press name in Log tab) ============ */
+// Renames an exercise in place. The exercise ID never changes, so every set,
+// PB, Progressive Overload record, and Progress/Stats calculation that keys
+// off the exercise ID stays connected automatically. Classification lives in
+// DB.exerciseClassificationOverrides keyed by *normalized name*, so if the
+// exercise had a manual classification under its old name, that override is
+// copied forward under the new name — the muscle group is not lost on rename.
+async function renameExercise(ex, newName){
+  const clean = newName.trim();
+  if(!clean || clean===ex.name) return false;
+  const oldName = ex.name;
+  const oldGroup = classifyExercise(oldName);
+  const oldSource = classificationSource(oldName);
+  ex.name = clean;
+  if(oldSource==='manual' && oldGroup){
+    // carry the manual override forward to the new name's key
+    await saveExerciseClassification(clean, oldGroup);
+  }
+  ex.classified = classificationSource(clean) !== 'unknown';
+  await save('exercises');
+  return true;
+}
+function openRenameExerciseModal(exerciseId){
+  const ex = exerciseById(exerciseId);
+  if(!ex) return;
+  const html = `
+    <div class="modal-sheet">
+      <div class="modal-close-row"><button class="icon-btn" id="m-close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button></div>
+      <h2 style="font-size:16px;margin-bottom:16px;">Edit exercise</h2>
+      <div class="field">
+        <label class="field-label">Exercise name</label>
+        <input type="text" id="m-exrename" value="${esc(ex.name)}" maxlength="60">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-block" id="m-cancel">Cancel</button>
+        <button class="btn btn-accent btn-block" id="m-save">Save</button>
+      </div>
+      <p style="font-size:11px;color:var(--text-faint);margin-top:12px;line-height:1.5;">All logged sets, personal bests and Progress history stay linked to this exercise.</p>
+    </div>`;
+  $modalRoot.innerHTML = `<div class="modal-overlay" id="m-overlay">${html}</div>`;
+  const input = document.getElementById('m-exrename');
+  const close = ()=>closeModal();
+  document.getElementById('m-close').onclick = close;
+  document.getElementById('m-cancel').onclick = close;
+  document.getElementById('m-overlay').onclick = e=>{ if(e.target.id==='m-overlay') close(); };
+  document.getElementById('m-save').onclick = async ()=>{
+    const name = input.value.trim();
+    if(!name){ toast('Name the exercise'); input.focus(); return; }
+    const changed = await renameExercise(ex, name);
+    closeModal();
+    render();
+    toast(changed ? 'Exercise renamed' : 'No changes made');
+  };
+  requestAnimationFrame(()=>{ input.focus(); input.select(); });
+}
+
 function openExerciseModal(splitId, dayId){
   $modalRoot.innerHTML = `
     <div class="modal-overlay" id="m-overlay">
@@ -733,20 +947,29 @@ function openExerciseModal(splitId, dayId){
     const name = inp.value.trim();
     if(!name){ toast('Name the exercise'); return; }
     const knownGroup = classifyExercise(name);
-    const finishAdd = async group=>{
-      const dayExs = allExercisesOfDay(dayId);
-      const nextOrder = dayExs.length ? Math.max(...dayExs.map(e=>e.order||0))+1 : 0;
-      DB.exercises.push({ id:uid('ex'), splitId, dayId, name, archived:false, order:nextOrder, createdAt:new Date().toISOString() });
-      await save('exercises');
-      if(group && classificationSource(name)==='unknown') await saveExerciseClassification(name, group);
-      render();
-      toast('Exercise added');
-    };
+    // The exercise is always created here, immediately — never gated behind the
+    // muscle-classification step. That step (below) is a best-effort follow-up:
+    // if the user closes it without picking a group, the exercise is already
+    // saved and simply stays "Unclassified" until they classify it later
+    // (from the Split tab's classify affordance).
+    const dayExs = allExercisesOfDay(dayId);
+    const nextOrder = dayExs.length ? Math.max(...dayExs.map(e=>e.order||0))+1 : 0;
+    const newEx = { id:uid('ex'), splitId, dayId, name, archived:false, classified:!!knownGroup, order:nextOrder, createdAt:new Date().toISOString() };
+    DB.exercises.push(newEx);
+    await save('exercises');
+    closeModal();
+    render();
+    toast('Exercise added');
     if(!knownGroup){
-      openMuscleClassificationModal(name, async group=>{ await finishAdd(group); });
-    } else {
-      closeModal();
-      await finishAdd(knownGroup);
+      // Offer classification as an optional follow-up. Closing this dialog
+      // (X or overlay tap) does NOT remove or affect the exercise in any way.
+      openMuscleClassificationModal(name, async group=>{
+        await saveExerciseClassification(name, group);
+        newEx.classified = true;
+        await save('exercises');
+        render();
+        toast('Muscle group saved');
+      });
     }
   };
 }
@@ -1061,6 +1284,8 @@ function renderLog(){
     ${!isToday ? `<button class="log-date-today" id="log-today-btn">Today</button>` : ''}
   </div>`;
 
+  html += buildHistoryCardHtml();
+
   if(exs.length===0){
     html += `<div class="empty">
       <svg viewBox="0 0 24 24"><path d="M6 4v16M18 4v16M2 9h4M2 15h4M18 9h4M18 15h4" stroke-linecap="round"/></svg>
@@ -1072,7 +1297,7 @@ function renderLog(){
       const daySets = setsOfExercise(ex.id).filter(s=>s.date===state.logDate);
       return `<div class="card">
         <div class="row-between" style="margin-bottom:${daySets.length?'6px':'0'};">
-          <h3 style="font-size:14.5px;">${esc(ex.name)}</h3>
+          <h3 style="font-size:14.5px;"><span class="log-exname" data-renamex="${ex.id}">${esc(ex.name)}</span>${classificationSource(ex.name)==='unknown' ? '<span class="exname-badge">Unclassified</span>' : ''}</h3>
           <button class="btn btn-accent btn-sm" data-logset="${ex.id}">+ Set</button>
         </div>
         ${daySets.map(s=>{
@@ -1131,6 +1356,32 @@ function renderLog(){
   const a1=document.getElementById('log-addex'), a2=document.getElementById('log-addex2');
   if(a1) a1.onclick = ()=>openExerciseModal(split.id, state.logDayId);
   if(a2) a2.onclick = ()=>openExerciseModal(split.id, state.logDayId);
+  // Long-press the exercise name (not the whole row/button) to rename it in place.
+  // The Split tab already uses long-press on the whole row for drag-reordering,
+  // so this is scoped tightly to the name text to avoid any gesture collision.
+  document.querySelectorAll('.log-exname[data-renamex]').forEach(nameEl=>{
+    let timer = null, longPressed = false, sx=0, sy=0;
+    const clearPress = ()=>{ if(timer){ clearTimeout(timer); timer=null; } nameEl.classList.remove('press-armed'); };
+    nameEl.addEventListener('pointerdown', e=>{
+      if(e.pointerType==='mouse' && e.button!==0) return;
+      longPressed=false; sx=e.clientX; sy=e.clientY;
+      nameEl.classList.add('press-armed');
+      timer = setTimeout(()=>{
+        timer=null; longPressed=true;
+        nameEl.classList.remove('press-armed');
+        if(navigator.vibrate) navigator.vibrate(12);
+        openRenameExerciseModal(nameEl.dataset.renamex);
+      }, 550);
+    });
+    nameEl.addEventListener('pointermove', e=>{
+      if(!timer) return;
+      if(Math.hypot(e.clientX-sx, e.clientY-sy) > 10) clearPress();
+    });
+    nameEl.addEventListener('pointerup', clearPress);
+    nameEl.addEventListener('pointercancel', clearPress);
+    nameEl.addEventListener('pointerleave', e=>{ if(e.pointerType==='mouse') clearPress(); });
+    nameEl.addEventListener('contextmenu', e=>e.preventDefault());
+  });
   document.querySelectorAll('[data-logset]').forEach(b=> b.onclick = ()=>openSetModal(b.dataset.logset));
   document.querySelectorAll('[data-delset]').forEach(b=> b.onclick = async (e)=>{
     e.stopPropagation();
@@ -1145,7 +1396,104 @@ function renderLog(){
   if(dateInput) dateInput.onchange = e=>{ state.logDate = e.target.value || todayStr(); render(); };
   const todayBtn = document.getElementById('log-today-btn');
   if(todayBtn) todayBtn.onclick = ()=>{ state.logDate = todayStr(); render(); };
+  bindHistoryCard();
 }
+
+/* ============ PREVIOUS SESSIONS CARD (Log tab) ============ */
+function buildHistoryCardHtml(){
+  const sessions = allLoggedSessions(); // ascending by date
+  if(!sessions.length){
+    return `<div class="card history-card">
+      <button type="button" class="history-toggle" id="history-toggle" aria-expanded="false">
+        <span class="history-toggle-label">Previous session</span>
+        <span class="history-toggle-center"><span class="history-toggle-day">No sessions yet</span></span>
+        <span class="history-toggle-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+      </button>
+    </div>`;
+  }
+  // Keep the browsed date valid; default to the most recent session on/before
+  // the date currently being logged, falling back to the latest session overall.
+  if(!state.logHistoryDate || !sessions.some(s=>s.date===state.logHistoryDate)){
+    const onOrBefore = sessions.filter(s=>s.date<=state.logDate);
+    state.logHistoryDate = (onOrBefore.length ? onOrBefore[onOrBefore.length-1] : sessions[sessions.length-1]).date;
+  }
+  const idx = sessions.findIndex(s=>s.date===state.logHistoryDate);
+  const session = sessions[idx];
+  const hasPrev = idx > 0;
+  const hasNext = idx < sessions.length-1;
+
+  const exRows = session.exercises.slice(0,6).map(ex=>{
+    const exSets = session.sets.filter(s=>s.exerciseId===ex.id);
+    const summary = exSets.map(s=>`${s.weight}&times;${s.reps}`).join(', ');
+    return `<div class="history-exrow"><span class="hx-name">${esc(ex.name)}</span><span class="hx-sets">${summary}</span></div>`;
+  }).join('') + (session.exercises.length>6 ? `<div class="history-exrow"><span class="hx-name">+${session.exercises.length-6} more</span></div>` : '');
+
+  return `<div class="card history-card ${state.logHistoryOpen?'is-open':''}">
+    <button type="button" class="history-toggle" id="history-toggle" aria-expanded="${state.logHistoryOpen?'true':'false'}" aria-controls="history-details">
+      <span class="history-toggle-label">Previous session</span>
+      <span class="history-toggle-center">
+        <span class="history-toggle-date">${fmtDate(session.date)}</span>
+        <span class="history-toggle-day">${esc(session.dayName)}</span>
+      </span>
+      <span class="history-toggle-meta">${session.setCount} sets</span>
+      <span class="history-toggle-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+    </button>
+    <div class="history-details" id="history-details">
+      <div class="history-details-inner">
+        <div class="history-nav">
+          <button class="history-navbtn" id="hist-prev" ${!hasPrev?'disabled':''} aria-label="Previous session"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <div class="history-center">
+            <div class="history-date">${fmtDate(session.date)}</div>
+            <div class="history-dayname">${esc(session.dayName)}</div>
+          </div>
+          <button class="history-navbtn" id="hist-next" ${!hasNext?'disabled':''} aria-label="Next session"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+        <div class="history-body">${exRows}</div>
+        <div class="history-summary">
+          <div class="hs-item"><div class="hs-label">Volume</div><div class="hs-value">${Math.round(session.volume).toLocaleString()}<span style="font-size:10px;color:var(--text-faint);"> kg</span></div></div>
+          <div class="hs-item"><div class="hs-label">Sets</div><div class="hs-value">${session.setCount}</div></div>
+          <div class="hs-item"><div class="hs-label">Exercises</div><div class="hs-value">${session.exercises.length}</div></div>
+        </div>
+        <button class="btn btn-ghost history-jump" id="hist-jump">Jump to this session</button>
+      </div>
+    </div>
+  </div>`;
+}
+function bindHistoryCard(){
+  const card = document.querySelector('.history-card');
+  const toggle = document.getElementById('history-toggle');
+  const prev = document.getElementById('hist-prev');
+  const next = document.getElementById('hist-next');
+  const jump = document.getElementById('hist-jump');
+
+  if(toggle) toggle.onclick = ()=>{
+    state.logHistoryOpen = !state.logHistoryOpen;
+    if(card){
+      card.classList.toggle('is-open', state.logHistoryOpen);
+      toggle.setAttribute('aria-expanded', state.logHistoryOpen ? 'true' : 'false');
+    }
+  };
+
+  if(prev) prev.onclick = ()=>{
+    const sessions = allLoggedSessions();
+    const idx = sessions.findIndex(s=>s.date===state.logHistoryDate);
+    if(idx>0){ state.logHistoryDate = sessions[idx-1].date; renderLog(); }
+  };
+  if(next) next.onclick = ()=>{
+    const sessions = allLoggedSessions();
+    const idx = sessions.findIndex(s=>s.date===state.logHistoryDate);
+    if(idx<sessions.length-1){ state.logHistoryDate = sessions[idx+1].date; renderLog(); }
+  };
+  if(jump) jump.onclick = ()=>{
+    const session = sessionByDate(state.logHistoryDate);
+    if(!session) return;
+    state.logDate = session.date;
+    if(session.dayId && activeSplit() && activeSplit().days.some(d=>d.id===session.dayId)) state.logDayId = session.dayId;
+    state.logHistoryOpen = false;
+    render();
+  };
+}
+
 
 function openSetModal(exerciseId, editSetId){
   const ex = exerciseById(exerciseId);
@@ -1561,7 +1909,53 @@ function positionStatsFloatCard(pos){
     <circle cx="${pos.x.toFixed(1)}" cy="${pos.y.toFixed(1)}" r="3.5"/>`;
 }
 
+/* ============ PROGRESS: MODE SWITCHER (Exercise / Day / Split) ============ */
+// A lightweight, tappable "orbit" selector between the three Progress reports.
+// It intentionally avoids a literal fake-3D hologram (per spec) in favor of an
+// elegant, mobile-cheap tri-state control that still feels like a single
+// rotating analytics object: the active segment lifts and a dot-strip below
+// echoes the existing plate-rule tab indicator idiom used elsewhere in the app.
+function progressModesAvailable(){
+  const modes = ['exercise','day'];
+  if(DB.splits.length>=2) modes.push('split');
+  return modes;
+}
+function buildProgressModeSwitcherHtml(){
+  const modes = progressModesAvailable();
+  if(!modes.includes(state.progressMode)) state.progressMode = 'exercise';
+  const icons = {
+    exercise:'<svg viewBox="0 0 24 24"><path d="M4 19V9M11 19V4M18 19v-6" stroke-linecap="round"/></svg>',
+    day:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18" stroke-linecap="round"/></svg>',
+    split:'<svg viewBox="0 0 24 24"><circle cx="7" cy="12" r="3"/><circle cx="17" cy="6" r="3"/><circle cx="17" cy="18" r="3"/><path d="M9.5 10.5L14.5 7.5M9.5 13.5L14.5 16.5" stroke-linecap="round"/></svg>'
+  };
+  const labels = {exercise:'Exercise',day:'Day',split:'Split'};
+  return `<div class="card progress-modes-card">
+    <div class="progress-modes">
+      ${modes.map(m=>`<button data-mode="${m}" class="${state.progressMode===m?'active':''}">${icons[m]}${labels[m]}</button>`).join('')}
+    </div>
+    <div class="progress-orbit-dots">${modes.map(m=>`<span class="od ${state.progressMode===m?'hot':''}"></span>`).join('')}</div>
+  </div>`;
+}
+function bindProgressModeSwitcher(){
+  document.querySelectorAll('.progress-modes [data-mode]').forEach(b=>{
+    b.onclick = ()=>{
+      if(state.progressMode===b.dataset.mode) return;
+      state.progressMode = b.dataset.mode;
+      render();
+    };
+  });
+}
+
 function renderProgress(){
+  if(!DB.splits.length){ setHeader('Progress','No data yet',null,null); renderOnboarding(); return; }
+  const modes = progressModesAvailable();
+  if(!modes.includes(state.progressMode)) state.progressMode = 'exercise';
+  if(state.progressMode==='day'){ renderProgressDayMode(); return; }
+  if(state.progressMode==='split'){ renderProgressSplitMode(); return; }
+  renderProgressExerciseMode();
+}
+
+function renderProgressExerciseMode(){
   if(!DB.splits.length){ setHeader('Progress','No data yet',null,null); renderOnboarding(); return; }
   if(!state.progressSplitId) state.progressSplitId = (activeSplit()||DB.splits[0]).id;
   const split = splitById(state.progressSplitId) || activeSplit() || DB.splits[0];
@@ -1572,7 +1966,9 @@ function renderProgress(){
   const allDayIds = split.days.map(d=>d.id);
   const exList = DB.exercises.filter(e=> allDayIds.includes(e.dayId));
 
-  let html = `<div class="card">
+  let html = buildProgressModeSwitcherHtml();
+
+  html += `<div class="card">
     <div class="card-title">Viewing split</div>
     <select id="p-split">
       ${DB.splits.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(s=>`<option value="${s.id}" ${s.id===split.id?'selected':''}>${esc(s.name)}${s.archivedAt?' (archived)':' (active)'}</option>`).join('')}
@@ -1582,6 +1978,7 @@ function renderProgress(){
   if(exList.length===0){
     html += `<div class="empty"><p>No exercises logged under this split yet.</p></div>`;
     $main.innerHTML = html;
+    bindProgressModeSwitcher();
     document.getElementById('p-split').onchange = e=>{ state.progressSplitId=e.target.value; state.progressExerciseId=null; render(); };
     return;
   }
@@ -1603,6 +2000,7 @@ function renderProgress(){
   if(sets.length===0){
     html += `<div class="empty"><p>No sets logged for this exercise yet — log one from the Log tab.</p></div>`;
     $main.innerHTML = html;
+    bindProgressModeSwitcher();
     bindProgressSelectors();
     return;
   }
@@ -1893,6 +2291,7 @@ function renderProgress(){
   }
 
   $main.innerHTML = html;
+  bindProgressModeSwitcher();
   bindProgressSelectors();
 
   document.querySelectorAll('#p-metric button').forEach(b=> b.onclick = ()=>{ state.progressMetric=b.dataset.m; renderProgress(); });
@@ -1945,6 +2344,358 @@ function renderProgress(){
   }
 }
 
+/* ============ PROGRESS: DAY / SESSION REPORT ============ */
+function progressScoreRingSvg(pct){
+  const r = 32, c = 2*Math.PI*r;
+  const off = c * (1 - Math.max(0,Math.min(100,pct))/100);
+  const color = pct>=75 ? 'var(--good)' : pct>=45 ? 'var(--accent)' : 'var(--rust)';
+  return `<svg viewBox="0 0 78 78">
+    <circle cx="39" cy="39" r="${r}" fill="none" stroke="var(--surface2)" stroke-width="7"/>
+    <circle cx="39" cy="39" r="${r}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round"
+      stroke-dasharray="${c}" stroke-dashoffset="${off}"/>
+  </svg>`;
+}
+function renderProgressDayMode(){
+  setHeader('Progress', 'Day performance', null, null);
+  destroyCharts(); // clear any charts left over from another Progress mode
+  let html = buildProgressModeSwitcherHtml();
+
+  const sessions = allLoggedSessions();
+  if(!sessions.length){
+    html += `<div class="empty"><p>No logged sessions yet. Log a workout from the Log tab to see day-level analytics here.</p></div>`;
+    $main.innerHTML = html; bindProgressModeSwitcher(); return;
+  }
+
+  if(!state.progressDaySessionDate || !sessions.some(s=>s.date===state.progressDaySessionDate)){
+    state.progressDaySessionDate = sessions[sessions.length-1].date; // most recent
+  }
+  const descDates = sessions.slice().reverse();
+  html += `<div class="card">
+    <div class="card-title">Session</div>
+    <select id="p-day-session">
+      ${descDates.map(s=>`<option value="${s.date}" ${s.date===state.progressDaySessionDate?'selected':''}>${fmtDate(s.date)} &middot; ${esc(s.dayName)}</option>`).join('')}
+    </select>
+  </div>`;
+
+  const session = sessionByDate(state.progressDaySessionDate);
+  const daySessions = session.dayId ? sessionsForDay(session.dayId) : [session];
+  const occIndex = daySessions.findIndex(s=>s.date===session.date);
+  const prevOcc = occIndex>0 ? daySessions[occIndex-1] : null;
+
+  // ---- overview metrics ----
+  const totalVolume = session.volume;
+  const totalSets = session.setCount;
+  const totalReps = session.repCount;
+  const exCount = session.exercises.length;
+  const avgWeight = totalSets ? (session.sets.reduce((a,s)=>a+s.weight,0)/totalSets) : 0;
+  const avgReps = totalSets ? (totalReps/totalSets) : 0;
+
+  // PRs achieved this session: exercise's top weight this session ties/exceeds
+  // its all-time-best weight as of this date (using existing PB logic, no
+  // change to how PBs are calculated elsewhere — this just checks the max).
+  let prCount = 0; const prExNames = [];
+  session.exercises.forEach(ex=>{
+    const histSets = setsOfExercise(ex.id).filter(s=>s.date<=session.date);
+    if(!histSets.length) return;
+    const allTimeBest = Math.max(...histSets.map(s=>s.weight));
+    const sessionBest = Math.max(...session.sets.filter(s=>s.exerciseId===ex.id).map(s=>s.weight));
+    if(sessionBest>=allTimeBest){ prCount++; prExNames.push(ex.name); }
+  });
+
+  // strongest single-set performance this session (by set volume)
+  let strongest = null;
+  session.sets.forEach(s=>{
+    const v = s.weight*s.reps;
+    if(!strongest || v>strongest.v) strongest = {v, ex: exerciseById(s.exerciseId), s};
+  });
+
+  const volChangePct = prevOcc && prevOcc.volume>0 ? ((totalVolume-prevOcc.volume)/prevOcc.volume*100) : null;
+  const setDelta = prevOcc ? totalSets - prevOcc.setCount : null;
+  const repsDelta = prevOcc ? +(avgReps - (prevOcc.repCount/prevOcc.setCount)).toFixed(1) : null;
+
+  html += `<div class="card">
+    <div class="card-title">Session overview</div>
+    <div class="stat-grid">
+      <div class="stat-tile"><div class="label">Total volume</div><div class="value">${Math.round(totalVolume).toLocaleString()}<span class="unit">kg</span></div></div>
+      <div class="stat-tile"><div class="label">Total sets</div><div class="value">${totalSets}</div><div class="sub">${exCount} exercise${exCount===1?'':'s'}</div></div>
+      <div class="stat-tile"><div class="label">Total reps</div><div class="value">${totalReps}</div><div class="sub">avg ${avgReps.toFixed(1)}/set</div></div>
+      <div class="stat-tile"><div class="label">Avg weight</div><div class="value">${avgWeight.toFixed(1)}<span class="unit">kg</span></div></div>
+      <div class="stat-tile"><div class="label">PRs this session</div><div class="value">${prCount}</div><div class="sub">${prCount ? esc(prExNames.slice(0,2).join(', ')) : '&mdash;'}</div></div>
+      <div class="stat-tile"><div class="label">Strongest set</div><div class="value" style="font-size:14px;">${strongest ? esc(strongest.ex.name) : '&mdash;'}</div><div class="sub">${strongest ? `${strongest.s.weight}kg &times; ${strongest.s.reps}` : ''}</div></div>
+    </div>
+  </div>`;
+
+  // ---- muscle distribution ----
+  const muscleVol = {};
+  session.sets.forEach(s=>{
+    const ex = exerciseById(s.exerciseId); if(!ex) return;
+    const g = classifyExercise(ex.name);
+    if(!g) return;
+    muscleVol[g] = (muscleVol[g]||0) + s.weight*s.reps;
+  });
+  const muscleKeys = Object.keys(muscleVol);
+  html += `<div class="card">
+    <div class="card-title">Muscle distribution</div>
+    ${muscleKeys.length ? (()=>{
+      const max = Math.max(...muscleKeys.map(k=>muscleVol[k]));
+      return STATS_GROUPS.filter(g=>muscleVol[g]).map(g=>`
+        <div class="muscle-bar-row">
+          <div class="mb-label">${STATS_LABELS[g]}</div>
+          <div class="muscle-bar-track"><div class="muscle-bar-fill" style="width:${Math.round(muscleVol[g]/max*100)}%"></div></div>
+          <div class="muscle-bar-val">${Math.round(muscleVol[g]).toLocaleString()}kg</div>
+        </div>`).join('');
+    })() : `<p style="font-size:12.5px;color:var(--text-faint);">Muscle group not classified for the exercises in this session.</p>`}
+    ${session.exercises.some(ex=>classificationSource(ex.name)==='unknown') ? `<p style="font-size:11px;color:var(--text-faint);margin-top:8px;">Some exercises here aren't classified yet — classify them from the Split tab to include their volume.</p>` : ''}
+  </div>`;
+
+  // ---- session performance score (transparent, only if enough data) ----
+  if(!prevOcc && daySessions.length<2){
+    html += `<div class="card">
+      <div class="card-title">Session performance</div>
+      <p style="font-size:12.5px;color:var(--text-faint);">Not enough history for a performance score — this is the first logged occurrence of this day.</p>
+    </div>`;
+  } else {
+    const priorOccs = daySessions.slice(0, occIndex);
+    const avgPriorSets = priorOccs.length ? priorOccs.reduce((a,s)=>a+s.setCount,0)/priorOccs.length : totalSets;
+    const avgPriorReps = priorOccs.length ? priorOccs.reduce((a,s)=>a+s.repCount/s.setCount,0)/priorOccs.length : avgReps;
+    const volumeTrendScore = volChangePct==null ? 50 : Math.max(0,Math.min(100, 50 + volChangePct));
+    const setCompletionScore = avgPriorSets>0 ? Math.max(0,Math.min(100, (totalSets/avgPriorSets)*100)) : 50;
+    const repPerformanceScore = avgPriorReps>0 ? Math.max(0,Math.min(100, (avgReps/avgPriorReps)*100)) : 50;
+    const prScore = prCount>0 ? 100 : 55;
+    const components = [
+      {label:'Volume trend', v:volumeTrendScore},
+      {label:'Set completion', v:setCompletionScore},
+      {label:'Rep performance', v:repPerformanceScore},
+      {label:'PRs achieved', v:prScore}
+    ];
+    const overall = Math.round(components.reduce((a,c)=>a+c.v,0)/components.length);
+    html += `<div class="card">
+      <div class="card-title">Session performance</div>
+      <div class="score-ring-row">
+        <div class="score-ring">${progressScoreRingSvg(overall)}<div class="ring-num">${overall}</div></div>
+        <div class="score-components">
+          ${components.map(c=>`<div class="score-comp-row"><span>${c.label}</span><b>${Math.round(c.v)}</b></div>`).join('')}
+        </div>
+      </div>
+      <p style="font-size:10.5px;color:var(--text-faint);margin-top:10px;line-height:1.4;">A transparent composite of the components above — not a scientific fitness score, just a quick read on how this session compares with your own history for this day.</p>
+    </div>`;
+  }
+
+  // ---- comparison vs previous occurrence ----
+  html += `<div class="card">
+    <div class="card-title">Vs. previous occurrence of this day</div>
+    ${prevOcc ? `
+      <div class="compare-row"><span class="cr-label">Volume</span><span class="cr-val" style="color:${volChangePct>0?'var(--good)':volChangePct<0?'var(--rust)':'var(--text)'}">${volChangePct==null?'&mdash;':(volChangePct>=0?'+':'')+volChangePct.toFixed(1)+'%'}</span></div>
+      <div class="compare-row"><span class="cr-label">Sets</span><span class="cr-val" style="color:${setDelta>0?'var(--good)':setDelta<0?'var(--rust)':'var(--text)'}">${setDelta>=0?'+':''}${setDelta}</span></div>
+      <div class="compare-row"><span class="cr-label">Avg reps</span><span class="cr-val" style="color:${repsDelta>0?'var(--good)':repsDelta<0?'var(--rust)':'var(--text)'}">${repsDelta>=0?'+':''}${repsDelta}</span></div>
+      <div class="compare-row"><span class="cr-label">PRs</span><span class="cr-val">${prCount}</span></div>
+      <div class="compare-row"><span class="cr-label">Previous occurrence</span><span class="cr-val" style="font-size:12px;color:var(--text-faint);">${fmtDate(prevOcc.date)}</span></div>
+    ` : `<p style="font-size:12.5px;color:var(--text-faint);">No previous occurrence of this day to compare against yet.</p>`}
+  </div>`;
+
+  // ---- trend chart across occurrences of this day ----
+  if(daySessions.length>=2){
+    html += `<div class="card">
+      <div class="card-title">Volume across occurrences of this day</div>
+      <div class="chart-wrap"><canvas id="chart-day-trend" role="img" aria-label="Volume trend across occurrences of this day">Day volume trend chart.</canvas></div>
+    </div>`;
+  }
+
+  $main.innerHTML = html;
+  bindProgressModeSwitcher();
+  document.getElementById('p-day-session').onchange = e=>{ state.progressDaySessionDate = e.target.value; render(); };
+
+  if(daySessions.length>=2){
+    destroyCharts();
+    charts.dayTrend = new Chart(document.getElementById('chart-day-trend'), {
+      type:'line',
+      data:{ labels: daySessions.map(s=>fmtDate(s.date)), datasets:[{ label:'Volume', data: daySessions.map(s=>Math.round(s.volume)),
+        borderColor:'#E8B32C', backgroundColor:'rgba(232,179,44,0.1)', borderWidth:2, pointRadius:4,
+        pointBackgroundColor: daySessions.map(s=>s.date===session.date?'#E8B32C':'#5D636B'),
+        pointBorderColor:'#1B1E23', pointBorderWidth:2, fill:true, tension:0.25 }]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        interaction:{ mode:'index', intersect:false },
+        plugins:{ legend:{display:false}, tooltip:{mode:'index',intersect:false} },
+        scales:{ x:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'} },
+                 y:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'}, beginAtZero:true } } }
+    });
+  }
+}
+
+/* ============ PROGRESS: SPLIT COMPARISON REPORT ============ */
+function exercisesOfSplit(split){
+  const dayIds = new Set([...(split.dayIds||[]), ...(split.days||[]).map(d=>d.id)]);
+  return DB.exercises.filter(e=> e.splitId===split.id || dayIds.has(e.dayId));
+}
+function setsOfSplit(split){
+  const exIds = new Set(exercisesOfSplit(split).map(e=>e.id));
+  return DB.sets.filter(s=>exIds.has(s.exerciseId));
+}
+function splitAggregateMetrics(split){
+  const exs = exercisesOfSplit(split);
+  const sets = setsOfSplit(split);
+  const sessions = [...new Set(sets.map(s=>s.date))];
+  const totalVolume = sets.reduce((a,s)=>a+s.weight*s.reps,0);
+  const totalSets = sets.length;
+  const totalReps = sets.reduce((a,s)=>a+s.reps,0);
+  const avgSessionVolume = sessions.length ? totalVolume/sessions.length : 0;
+  // PR count: exercises where the split's own logged max weight equals that
+  // exercise's all-time max weight (i.e. the PR happened while on this split).
+  let prCount = 0;
+  exs.forEach(ex=>{
+    const exSets = setsOfExercise(ex.id);
+    if(!exSets.length) return;
+    const allTimeMax = Math.max(...exSets.map(s=>s.weight));
+    const splitSets = sets.filter(s=>s.exerciseId===ex.id);
+    if(splitSets.length && Math.max(...splitSets.map(s=>s.weight))>=allTimeMax) prCount++;
+  });
+  const muscleVol = {};
+  sets.forEach(s=>{ const ex=exerciseById(s.exerciseId); if(!ex) return; const g=classifyExercise(ex.name); if(g) muscleVol[g]=(muscleVol[g]||0)+s.weight*s.reps; });
+  return { exs, sets, sessions, totalVolume, totalSets, totalReps, avgSessionVolume, prCount, muscleVol,
+    frequency: sessions.length };
+}
+function renderProgressSplitMode(){
+  setHeader('Progress', 'Split comparison', null, null);
+  destroyCharts(); // clear any charts left over from another Progress mode
+  let html = buildProgressModeSwitcherHtml();
+
+  if(DB.splits.length<2){
+    html += `<div class="empty"><p>Split comparison needs at least two splits. Create another split to unlock this report.</p></div>`;
+    $main.innerHTML = html; bindProgressModeSwitcher(); return;
+  }
+
+  const sortedSplits = DB.splits.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  if(!state.progressSplitAId || !DB.splits.some(s=>s.id===state.progressSplitAId)) state.progressSplitAId = sortedSplits[0].id;
+  if(!state.progressSplitBId || !DB.splits.some(s=>s.id===state.progressSplitBId) || state.progressSplitBId===state.progressSplitAId){
+    state.progressSplitBId = (sortedSplits.find(s=>s.id!==state.progressSplitAId) || sortedSplits[1]).id;
+  }
+  const splitA = splitById(state.progressSplitAId);
+  const splitB = splitById(state.progressSplitBId);
+
+  html += `<div class="card">
+    <div class="card-title">Comparing</div>
+    <div class="split-vs-bar">
+      <select id="p-splitA">${sortedSplits.map(s=>`<option value="${s.id}" ${s.id===splitA.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
+      <span class="split-vs-x">vs</span>
+      <select id="p-splitB">${sortedSplits.map(s=>`<option value="${s.id}" ${s.id===splitB.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
+    </div>
+  </div>`;
+
+  const mA = splitAggregateMetrics(splitA);
+  const mB = splitAggregateMetrics(splitB);
+  const noData = mA.sets.length===0 && mB.sets.length===0;
+
+  if(noData){
+    html += `<div class="empty"><p>Neither split has any logged sets yet, so there's nothing to compare.</p></div>`;
+    $main.innerHTML = html; bindProgressModeSwitcher();
+    document.getElementById('p-splitA').onchange = e=>{ state.progressSplitAId=e.target.value; render(); };
+    document.getElementById('p-splitB').onchange = e=>{ state.progressSplitBId=e.target.value; render(); };
+    return;
+  }
+
+  const fmtN = n => Math.round(n).toLocaleString();
+  html += `<div class="card">
+    <div class="card-title">Overall metrics</div>
+    <div class="split-legend">
+      <span><span class="dot" style="background:var(--accent);"></span>${esc(splitA.name)}</span>
+      <span><span class="dot" style="background:var(--rust);"></span>${esc(splitB.name)}</span>
+    </div>
+    ${[
+      ['Total volume', fmtN(mA.totalVolume)+'kg', fmtN(mB.totalVolume)+'kg'],
+      ['Total sets', mA.totalSets, mB.totalSets],
+      ['Total reps', mA.totalReps, mB.totalReps],
+      ['Frequency', mA.frequency+' sessions', mB.frequency+' sessions'],
+      ['Avg session vol.', fmtN(mA.avgSessionVolume)+'kg', fmtN(mB.avgSessionVolume)+'kg'],
+      ['PR count', mA.prCount, mB.prCount]
+    ].map(([label,a,b])=>`<div class="split-metric-row"><div class="sm-label">${label}</div><div class="sm-a">${a}</div><div class="sm-b">${b}</div></div>`).join('')}
+  </div>`;
+
+  // muscle-group volume comparison
+  const muscleKeysUnion = STATS_GROUPS.filter(g=>mA.muscleVol[g] || mB.muscleVol[g]);
+  html += `<div class="card">
+    <div class="card-title">Muscle-group volume</div>
+    ${muscleKeysUnion.length ? muscleKeysUnion.map(g=>{
+      const max = Math.max(mA.muscleVol[g]||0, mB.muscleVol[g]||0, 1);
+      return `<div class="muscle-bar-row">
+        <div class="mb-label">${STATS_LABELS[g]}</div>
+        <div class="muscle-bar-track"><div class="muscle-bar-fill" style="width:${Math.round((mA.muscleVol[g]||0)/max*100)}%;background:var(--accent);"></div></div>
+        <div class="muscle-bar-val">${fmtN(mA.muscleVol[g]||0)}</div>
+      </div>
+      <div class="muscle-bar-row" style="margin-top:-2px;">
+        <div class="mb-label"></div>
+        <div class="muscle-bar-track"><div class="muscle-bar-fill" style="width:${Math.round((mB.muscleVol[g]||0)/max*100)}%;background:var(--rust);"></div></div>
+        <div class="muscle-bar-val">${fmtN(mB.muscleVol[g]||0)}</div>
+      </div>`;
+    }).join('') : `<p style="font-size:12.5px;color:var(--text-faint);">No classified muscle-group volume to show for either split yet.</p>`}
+  </div>`;
+
+  // shared vs split-specific exercises
+  const normNameOf = ex => normalizeExerciseName(ex.name);
+  const namesA = new Map(); mA.exs.forEach(e=>{ const k=normNameOf(e); if(!namesA.has(k)) namesA.set(k, []); namesA.get(k).push(e); });
+  const namesB = new Map(); mB.exs.forEach(e=>{ const k=normNameOf(e); if(!namesB.has(k)) namesB.set(k, []); namesB.get(k).push(e); });
+  const sharedKeys = [...namesA.keys()].filter(k=>namesB.has(k) && k);
+  const onlyA = [...namesA.keys()].filter(k=>!namesB.has(k) && k).map(k=>namesA.get(k)[0].name);
+  const onlyB = [...namesB.keys()].filter(k=>!namesA.has(k) && k).map(k=>namesB.get(k)[0].name);
+
+  html += `<div class="card">
+    <div class="card-title">Shared vs. split-specific exercises</div>
+    ${sharedKeys.length ? `<p style="font-size:11.5px;color:var(--text-faint);margin-bottom:4px;">Shared (${sharedKeys.length})</p>
+      <div class="shared-ex-chip-list">${sharedKeys.map(k=>`<span class="ex-chip">${esc(namesA.get(k)[0].name)}</span>`).join('')}</div>` : `<p style="font-size:12.5px;color:var(--text-faint);">No shared exercises to compare.</p>`}
+    ${onlyA.length ? `<p style="font-size:11.5px;color:var(--text-faint);margin:10px 0 4px;">Only in ${esc(splitA.name)}</p><div class="uniq-ex-chip-list">${onlyA.map(n=>`<span class="ex-chip">${esc(n)}</span>`).join('')}</div>` : ''}
+    ${onlyB.length ? `<p style="font-size:11.5px;color:var(--text-faint);margin:10px 0 4px;">Only in ${esc(splitB.name)}</p><div class="uniq-ex-chip-list">${onlyB.map(n=>`<span class="ex-chip">${esc(n)}</span>`).join('')}</div>` : ''}
+  </div>`;
+
+  // same-exercise progression comparison (pick first shared exercise with sets in both, or let user pick)
+  if(!state.progressSplitSharedKey || !sharedKeys.includes(state.progressSplitSharedKey)){
+    state.progressSplitSharedKey = sharedKeys.find(k=> namesA.get(k).some(e=>setsOfExercise(e.id).some(s=>s.date)) ) || sharedKeys[0] || null;
+  }
+  if(sharedKeys.length){
+    html += `<div class="card">
+      <div class="card-title">Same-exercise progression</div>
+      <select id="p-shared-ex" style="margin-bottom:8px;">
+        ${sharedKeys.map(k=>`<option value="${k}" ${k===state.progressSplitSharedKey?'selected':''}>${esc(namesA.get(k)[0].name)}</option>`).join('')}
+      </select>
+      <div class="chart-wrap"><canvas id="chart-split-shared" role="img" aria-label="Weight progression comparison between the two splits for this exercise">Shared exercise progression chart.</canvas></div>
+      <div id="p-shared-ex-note"></div>
+    </div>`;
+  }
+
+  $main.innerHTML = html;
+  bindProgressModeSwitcher();
+  document.getElementById('p-splitA').onchange = e=>{ state.progressSplitAId=e.target.value; if(state.progressSplitAId===state.progressSplitBId) state.progressSplitBId=null; render(); };
+  document.getElementById('p-splitB').onchange = e=>{ state.progressSplitBId=e.target.value; if(state.progressSplitBId===state.progressSplitAId) state.progressSplitAId=null; render(); };
+  const sharedSel = document.getElementById('p-shared-ex');
+  if(sharedSel) sharedSel.onchange = e=>{ state.progressSplitSharedKey=e.target.value; render(); };
+
+  if(sharedKeys.length && state.progressSplitSharedKey){
+    const exsA = namesA.get(state.progressSplitSharedKey) || [];
+    const exsB = namesB.get(state.progressSplitSharedKey) || [];
+    const setsA = exsA.flatMap(e=>setsOfExercise(e.id)).sort((a,b)=>a.date<b.date?-1:1);
+    const setsB = exsB.flatMap(e=>setsOfExercise(e.id)).sort((a,b)=>a.date<b.date?-1:1);
+    const byDateMax = arr=>{ const m={}; arr.forEach(s=>{ m[s.date]=Math.max(m[s.date]||0, s.weight); }); return m; };
+    const mapA = byDateMax(setsA), mapB = byDateMax(setsB);
+    const allDates = [...new Set([...Object.keys(mapA), ...Object.keys(mapB)])].sort();
+    const note = document.getElementById('p-shared-ex-note');
+    if(!allDates.length){
+      if(note) note.innerHTML = `<p style="font-size:12.5px;color:var(--text-faint);margin-top:8px;">No logged sets for this exercise in either split yet.</p>`;
+    } else {
+      destroyCharts();
+      charts.splitShared = new Chart(document.getElementById('chart-split-shared'), {
+        type:'line',
+        data:{ labels: allDates.map(fmtDate), datasets:[
+          { label:esc(splitA.name), data: allDates.map(d=>mapA[d] ?? null), borderColor:'#E8B32C', backgroundColor:'rgba(232,179,44,0.1)', borderWidth:2, pointRadius:3, spanGaps:true, tension:0.25 },
+          { label:esc(splitB.name), data: allDates.map(d=>mapB[d] ?? null), borderColor:'#C1543A', backgroundColor:'rgba(193,84,58,0.1)', borderWidth:2, pointRadius:3, spanGaps:true, tension:0.25 }
+        ]},
+        options:{ responsive:true, maintainAspectRatio:false,
+          interaction:{ mode:'index', intersect:false },
+          plugins:{ legend:{display:true, labels:{color:'#9A9FA6',font:{size:10.5}}}, tooltip:{mode:'index',intersect:false} },
+          scales:{ x:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'} },
+                   y:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'}, title:{display:true,text:'Weight (kg)',color:'#9A9FA6',font:{size:11}} } } }
+      });
+    }
+  }
+}
+
 function bindProgressSelectors(){
   const ps = document.getElementById('p-split');
   if(ps) ps.onchange = e=>{ state.progressSplitId=e.target.value; state.progressExerciseId=null; render(); };
@@ -1957,6 +2708,7 @@ function destroyCharts(){ Object.values(charts).forEach(c=>{ if(c) c.destroy(); 
 /* ============ INIT ============ */
 (async function init(){
   await loadAll();
+  await applySmartLogDefault();
   registerPWA();
   render();
 })();
