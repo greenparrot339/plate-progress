@@ -180,12 +180,23 @@
     font-family:var(--font-body);font-size:13px;font-weight:600;padding:2px 2px;}
   .split-switch-bar select:focus{outline:none;}
   .split-active-tag{font-size:11px;color:var(--good);white-space:nowrap;}
-  .split-view-select{margin-left:auto;min-width:112px;height:38px;padding:0 30px 0 12px;border:1px solid var(--border);
-    border-radius:10px;background:var(--surface2);color:var(--text);font-family:var(--font-body);font-size:11px;font-weight:600;
-    text-transform:uppercase;letter-spacing:.05em;appearance:none;-webkit-appearance:none;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23979ba3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-    background-repeat:no-repeat;background-position:right 10px center;cursor:pointer;flex-shrink:0;}
-  .split-view-select:focus{outline:none;border-color:var(--accent);}
+  .split-view-picker{position:relative;margin-left:auto;flex-shrink:0;}
+  .split-view-trigger{width:38px;height:38px;padding:0;border:1px solid var(--border);border-radius:10px;background:var(--surface2);
+    color:var(--text-dim);display:flex;align-items:center;justify-content:center;transition:background .16s ease,border-color .16s ease,color .16s ease;}
+  .split-view-trigger:hover,.split-view-trigger:focus-visible{border-color:var(--accent);color:var(--accent);outline:none;}
+  .split-view-trigger svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .split-view-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:25;min-width:142px;padding:5px;border:1px solid var(--border);
+    border-radius:10px;background:var(--surface);box-shadow:0 12px 28px rgba(0,0,0,.34);opacity:0;visibility:hidden;
+    transform:translateY(-4px) scale(.98);transform-origin:top right;transition:opacity .14s ease,transform .14s ease,visibility .14s ease;}
+  .split-view-menu.open{opacity:1;visibility:visible;transform:translateY(0) scale(1);}
+  .split-view-option{width:100%;height:36px;padding:0 9px;border:0;border-radius:7px;background:transparent;color:var(--text-dim);
+    display:flex;align-items:center;gap:9px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;text-align:left;}
+  .split-view-option:hover,.split-view-option:focus-visible{background:var(--surface2);color:var(--text);outline:none;}
+  .split-view-option.active{color:var(--accent);background:var(--accent-dim);}
+  .split-view-option svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
+  .split-gallery-arrow.at-edge{border-color:var(--accent);background:var(--accent-dim);color:var(--accent);box-shadow:0 0 0 1px rgba(232,179,44,.12),0 0 12px rgba(232,179,44,.10);opacity:1;}
+  .split-gallery-arrow.at-edge.edge-flash{animation:galleryEdgeFlash .65s ease;}
+  @keyframes galleryEdgeFlash{0%{transform:scale(1)}35%{transform:scale(1.1);box-shadow:0 0 0 3px rgba(232,179,44,.16),0 0 18px rgba(232,179,44,.28)}100%{transform:scale(1)}}
   .split-gallery-shell{position:relative;overflow:hidden;border-radius:12px;}
   .split-gallery-track{position:relative;min-height:120px;touch-action:pan-y;user-select:none;-webkit-user-select:none;}
   .split-day-card{will-change:transform,opacity;transform:translate3d(0,0,0);opacity:1;position:relative;z-index:3;}
@@ -1312,13 +1323,13 @@ function buildGalleryHtml(split, idPrefix, opts={}){
     </div>
   </div>
   <div class="split-gallery-nav">
-    <button class="split-gallery-arrow" id="${idPrefix}-prev" aria-label="Previous day" ${dayIndex===0?'disabled':''}>
+    <button class="split-gallery-arrow ${dayIndex===0?'at-edge':''}" id="${idPrefix}-prev" aria-label="Previous day${dayIndex===0?' — start reached':''}" ${dayIndex===0?'disabled':''}>
       <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="split-gallery-position" aria-label="Day position">
       ${days.map((_,i)=>`<span class="split-gallery-dot ${i===dayIndex?'active':''}"></span>`).join('')}
     </div>
-    <button class="split-gallery-arrow" id="${idPrefix}-next" aria-label="Next day" ${dayIndex===days.length-1?'disabled':''}>
+    <button class="split-gallery-arrow ${dayIndex===days.length-1?'at-edge':''}" id="${idPrefix}-next" aria-label="Next day${dayIndex===days.length-1?' — end reached':''}" ${dayIndex===days.length-1?'disabled':''}>
       <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
   </div>
@@ -1371,8 +1382,17 @@ function bindGallery(split, idPrefix, opts={}){
   };
 
   const prevBtn=document.getElementById(idPrefix+'-prev'), nextBtn=document.getElementById(idPrefix+'-next');
-  if(prevBtn) prevBtn.onclick=()=>animateToDay(state.splitGalleryDayIndex-1,'prev');
-  if(nextBtn) nextBtn.onclick=()=>animateToDay(state.splitGalleryDayIndex+1,'next');
+  const flashEdge=(direction)=>{
+    const btn=direction==='next'?nextBtn:prevBtn;
+    if(!btn) return;
+    btn.classList.add('at-edge','edge-flash');
+    const label=direction==='next'?'End of days':'Start of days';
+    showProgressPill(label);
+    clearTimeout(btn._edgeTimer);
+    btn._edgeTimer=setTimeout(()=>{btn.classList.remove('edge-flash');showProgressPill(null);},650);
+  };
+  if(prevBtn) prevBtn.onclick=()=>{ const target=state.splitGalleryDayIndex-1; if(target<0){flashEdge('prev');return;} animateToDay(target,'prev'); };
+  if(nextBtn) nextBtn.onclick=()=>{ const target=state.splitGalleryDayIndex+1; if(target>=days.length){flashEdge('next');return;} animateToDay(target,'next'); };
   const maxBtn=document.getElementById(idPrefix+'-maxbtn');
   if(maxBtn) maxBtn.onclick=()=>openGalleryMaximize(split.id);
 
@@ -1399,7 +1419,10 @@ function bindGallery(split, idPrefix, opts={}){
       if(!dragging||e.pointerId!==pointerId)return;dragging=false;track.releasePointerCapture?.(pointerId);activeCard.classList.remove('gallery-dragging');
       const dx=e.clientX-startX,dy=e.clientY-startY,target=dx<0?state.splitGalleryDayIndex+1:state.splitGalleryDayIndex-1;
       showProgressPill(null);
-      if(!cancelled&&swipeStarted&&Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>=threshold&&target>=0&&target<days.length){animateToDay(target,dx<0?'next':'prev');return;}
+      if(!cancelled&&swipeStarted&&Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>=threshold){
+        if(target>=0&&target<days.length){animateToDay(target,dx<0?'next':'prev');return;}
+        flashEdge(dx<0?'next':'prev');
+      }
       activeCard.classList.add('gallery-snap');activeCard.style.transform='translate3d(0,0,0) rotate(0deg)';activeCard.style.opacity='1';setStackReveal(0);
       setTimeout(()=>{activeCard.classList.remove('gallery-snap');resetStack();},300);
     };
@@ -1444,8 +1467,9 @@ function bindGallery(split, idPrefix, opts={}){
       const dy=touchLastY-touchStartY;
       const target=dx<0?state.splitGalleryDayIndex+1:state.splitGalleryDayIndex-1;
       showProgressPill(null);
-      if(!cancelled&&touchSwipeStarted&&Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>=threshold&&target>=0&&target<days.length){
-        animateToDay(target,dx<0?'next':'prev'); return;
+      if(!cancelled&&touchSwipeStarted&&Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>=threshold){
+        if(target>=0&&target<days.length){ animateToDay(target,dx<0?'next':'prev'); return; }
+        flashEdge(dx<0?'next':'prev');
       }
       activeCard.classList.add('gallery-snap'); activeCard.style.transform='translate3d(0,0,0) rotate(0deg)'; activeCard.style.opacity='1'; setStackReveal(0);
       setTimeout(()=>{activeCard.classList.remove('gallery-snap');resetStack();},300);
@@ -1599,6 +1623,16 @@ function renderSplit(){
   );
 
   const allSplits = DB.splits.slice().sort((a,b)=> b.createdAt.localeCompare(a.createdAt));
+  const listIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>`;
+  const galleryIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.3"/><path d="m4.5 17 4.5-4.5 3.2 3.2 2.2-2.2 5.1 5.1"/></svg>`;
+  const currentViewIcon = state.splitViewMode==='gallery' ? galleryIcon : listIcon;
+  const viewMenu = `<div class="split-view-picker" id="split-view-picker">
+      <button class="split-view-trigger" id="split-view-trigger" aria-label="Change split view" aria-haspopup="menu" aria-expanded="false">${currentViewIcon}</button>
+      <div class="split-view-menu" id="split-view-menu" role="menu">
+        <button class="split-view-option ${state.splitViewMode==='list'?'active':''}" data-view-mode="list" role="menuitem">${listIcon}<span>List</span>${state.splitViewMode==='list'?'<span style="margin-left:auto">✓</span>':''}</button>
+        <button class="split-view-option ${state.splitViewMode==='gallery'?'active':''}" data-view-mode="gallery" role="menuitem">${galleryIcon}<span>Gallery</span>${state.splitViewMode==='gallery'?'<span style="margin-left:auto">✓</span>':''}</button>
+      </div>
+    </div>`;
   let html = `<div class="split-switch-bar">
     <span class="ldb-label">Viewing</span>
     <select id="split-switcher">
@@ -1607,10 +1641,7 @@ function renderSplit(){
     ${split.archivedAt
       ? `<button class="log-date-today" id="btn-setactive">Make active</button>`
       : `<span class="split-active-tag">&bull; active</span>`}
-    <select class="split-view-select" id="split-view-mode" aria-label="Split view">
-      <option value="list" ${state.splitViewMode==='list'?'selected':''}>List</option>
-      <option value="gallery" ${state.splitViewMode==='gallery'?'selected':''}>Gallery</option>
-    </select>
+    ${viewMenu}
   </div>`;
 
   if(state.splitViewMode==='gallery'){
@@ -1669,12 +1700,27 @@ function renderSplit(){
   if(switcher) switcher.onchange = e=>{ state.splitViewId = e.target.value; state.splitGalleryDayIndex=0; render(); };
   const setActiveBtn = document.getElementById('btn-setactive');
   if(setActiveBtn) setActiveBtn.onclick = ()=> switchToSplit(split.id);
-  const viewModeSelect=document.getElementById('split-view-mode');
-  if(viewModeSelect) viewModeSelect.onchange=()=>{
-    state.splitViewMode=viewModeSelect.value==='gallery'?'gallery':'list';
-    if(state.splitViewMode==='gallery') state.splitGalleryDayIndex=0;
-    render();
+  const viewPicker=document.getElementById('split-view-picker');
+  const viewTrigger=document.getElementById('split-view-trigger');
+  const viewMenuEl=document.getElementById('split-view-menu');
+  const closeViewMenu=()=>{
+    if(!viewMenuEl || !viewTrigger) return;
+    viewMenuEl.classList.remove('open'); viewTrigger.setAttribute('aria-expanded','false');
   };
+  if(viewTrigger && viewMenuEl){
+    viewTrigger.onclick=e=>{
+      e.stopPropagation();
+      const open=!viewMenuEl.classList.contains('open');
+      viewMenuEl.classList.toggle('open',open); viewTrigger.setAttribute('aria-expanded',String(open));
+    };
+    viewMenuEl.querySelectorAll('[data-view-mode]').forEach(option=>option.onclick=()=>{
+      state.splitViewMode=option.dataset.viewMode==='gallery'?'gallery':'list';
+      if(state.splitViewMode==='gallery') state.splitGalleryDayIndex=0;
+      closeViewMenu(); render();
+    });
+    document.addEventListener('click',e=>{ if(viewPicker && !viewPicker.contains(e.target)) closeViewMenu(); },{once:true});
+    document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeViewMenu(); },{once:true});
+  }
 
   if(state.splitViewMode==='list'){
     document.querySelectorAll('.exercise-list[data-daylist]').forEach(list=> attachExerciseReorder(list, list.dataset.daylist));
