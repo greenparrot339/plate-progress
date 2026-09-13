@@ -175,11 +175,88 @@
   .log-date-today{background:none;border:none;color:var(--text-faint);font-size:11px;padding:2px 6px;
     border-radius:20px;border:1px solid var(--border);font-family:var(--font-body);}
 
-  .split-switch-bar{display:flex;align-items:center;gap:6px;margin:-4px 0 14px;}
-  .split-switch-bar select{width:auto;max-width:60%;background:none;border:none;color:var(--accent);
+  .split-switch-bar{display:flex;align-items:center;gap:6px;margin:-4px 0 14px;min-width:0;}
+  .split-switch-bar select{width:auto;max-width:42%;background:none;border:none;color:var(--accent);
     font-family:var(--font-body);font-size:13px;font-weight:600;padding:2px 2px;}
   .split-switch-bar select:focus{outline:none;}
   .split-active-tag{font-size:11px;color:var(--good);white-space:nowrap;}
+  .split-view-toggle{margin-left:auto;display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--border);
+    border-radius:10px;background:var(--surface2);flex-shrink:0;}
+  .split-view-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;border:0;background:transparent;color:var(--text-faint);
+    border-radius:7px;padding:7px 9px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;font-family:var(--font-body);
+    cursor:pointer;transition:background .18s ease,color .18s ease,transform .18s ease;}
+  .split-view-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7;}
+  .split-view-btn.active{background:var(--surface);color:var(--text);box-shadow:0 1px 5px rgba(0,0,0,.22);}
+  .split-view-btn:active{transform:scale(.96);}
+  .split-gallery-shell{position:relative;overflow:hidden;border-radius:12px;}
+  .split-gallery-track{position:relative;min-height:120px;touch-action:pan-y;user-select:none;-webkit-user-select:none;}
+  .split-day-card{will-change:transform,opacity;transform:translate3d(0,0,0);opacity:1;position:relative;z-index:3;}
+  .split-day-card.is-stack-next,.split-day-card.is-stack-prev{position:absolute;inset:0;z-index:1;pointer-events:none;transform:translate3d(0,14px,0) scale(.965);opacity:.58;transition:transform .22s cubic-bezier(.22,.8,.24,1),opacity .22s ease;}
+  .split-day-card.is-stack-prev{transform:translate3d(0,14px,0) scale(.965);opacity:.5;}
+  .split-day-card.is-stack-next{transform:translate3d(0,12px,0) scale(.97);opacity:.62;}
+  .split-day-card.is-stack-next.stack-reveal,.split-day-card.is-stack-prev.stack-reveal{transform:translate3d(0,0,0) scale(1);opacity:1;}
+  .split-day-card.gallery-dragging{transition:none!important;}
+  .split-day-card.gallery-snap{transition:transform .28s cubic-bezier(.22,.8,.24,1),opacity .22s ease;}
+  .split-day-card.gallery-fly{transition:transform .30s cubic-bezier(.55,.1,.7,.25),opacity .24s ease;}
+  .split-day-card.gallery-promote{transition:transform .30s cubic-bezier(.22,.8,.24,1),opacity .22s ease;}
+  .split-gallery-card{margin:0;}
+  .split-gallery-card .exercise-list{margin-top:2px;}
+  .split-gallery-nav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;}
+  .split-gallery-arrow{width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);
+    border-radius:9px;background:var(--surface2);color:var(--text-dim);transition:transform .16s ease,background .16s ease;}
+  .split-gallery-arrow:active{transform:scale(.92);}
+  .split-gallery-arrow:disabled{opacity:.3;}
+  .split-gallery-arrow svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;}
+  .split-gallery-position{display:flex;align-items:center;justify-content:center;gap:4px;min-width:0;flex:1;}
+  .split-gallery-dot{width:5px;height:5px;border-radius:50%;background:var(--text-faint);opacity:.55;transition:width .22s ease,opacity .22s ease,transform .22s ease;}
+  .split-gallery-dot.active{width:15px;border-radius:5px;background:var(--accent);opacity:1;}
+  .split-gallery-hint{text-align:center;font-size:10px;color:var(--text-faint);margin:8px 0 0;letter-spacing:.03em;}
+
+  /* Fixed-size gallery "viewing window" — dimensions never change with exercise count,
+     conceptually mirroring the fixed Stats 3D viewport container. */
+  .split-gallery-viewport{position:relative;height:min(64vh,560px);min-height:400px;border-radius:12px;overflow:hidden;}
+  .split-gallery-viewport .split-gallery-shell{position:absolute;inset:0;border-radius:12px;perspective:1100px;}
+  .split-gallery-viewport .split-gallery-track{position:absolute;inset:0;height:100%;min-height:0;}
+  .split-day-card.gallery-card-flex{position:absolute;inset:0;display:flex;flex-direction:column;margin:0;}
+  .split-day-card.gallery-card-flex>.row-between{flex-shrink:0;}
+  /* Keep the gallery maximize control clear of the day header's + Exercise button. */
+  .split-gallery-viewport .split-day-card.gallery-card-flex>.row-between{padding-right:46px;}
+  .split-day-card.gallery-card-flex .gallery-scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;margin:0 -15px -14px;padding:0 15px 14px;}
+  .split-gallery-maxbtn{position:absolute;top:14px;right:9px;z-index:6;width:30px;height:30px;border-radius:8px;
+    background:rgba(18,20,23,.68);border:1px solid var(--border);color:var(--text-dim);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px);}
+  .split-gallery-maxbtn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.9;}
+  .split-gallery-maxbtn:active{transform:scale(.92);}
+
+  /* Maximized full-window overlay */
+  #gallery-max-overlay{position:fixed;inset:0;z-index:90;background:rgba(8,9,10,.94);display:flex;flex-direction:column;
+    padding:calc(12px + env(safe-area-inset-top)) 14px calc(12px + env(safe-area-inset-bottom));}
+  .gmax-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0;}
+  .gmax-header .gmax-title{font-family:var(--font-display);font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);}
+  .gmax-close{width:34px;height:34px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);display:flex;align-items:center;justify-content:center;}
+  .gmax-close svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.9;}
+  .gmax-close:active{transform:scale(.92);}
+  .gmax-body{flex:1;min-height:0;display:flex;flex-direction:column;}
+  .gmax-body .split-gallery-viewport{height:100%;min-height:0;flex:1;}
+  .gmax-hint{text-align:center;font-size:10.5px;color:var(--text-faint);margin-top:9px;flex-shrink:0;}
+
+  /* Drag-progress hint pill (both normal + maximized) */
+  .gallery-progress-pill{position:absolute;top:9px;left:50%;transform:translate(-50%,-6px);z-index:6;
+    font-family:var(--font-display);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--accent);
+    background:rgba(18,20,23,.72);padding:5px 12px;border-radius:20px;opacity:0;transition:opacity .15s ease,transform .15s ease;
+    pointer-events:none;border:1px solid rgba(232,179,44,.35);white-space:nowrap;}
+  .gallery-progress-pill.show{opacity:1;transform:translate(-50%,0);}
+
+  /* Paper-fold corner handles + flap (maximized mode only) */
+  .fold-handle{position:absolute;width:44px;height:44px;z-index:7;touch-action:none;}
+  .fold-handle.fold-tr{top:0;right:0;}
+  .fold-handle.fold-tl{top:0;left:0;}
+  .fold-handle::after{content:'';position:absolute;width:15px;height:15px;opacity:.7;}
+  .fold-handle.fold-tr::after{top:7px;right:7px;background:linear-gradient(135deg,transparent 48%,var(--accent) 50%);border-radius:0 4px 0 0;}
+  .fold-handle.fold-tl::after{top:7px;left:7px;background:linear-gradient(-45deg,transparent 48%,var(--accent) 50%);border-radius:4px 0 0 0;}
+  .fold-flap{position:absolute;top:0;z-index:5;pointer-events:none;background:linear-gradient(135deg,var(--surface2) 40%,var(--surface));
+    box-shadow:-3px 3px 14px rgba(0,0,0,.45);opacity:0;border-radius:0 0 0 6px;}
+  .fold-flap.fold-flap-tr{right:0;}
+  .fold-flap.fold-flap-tl{left:0;}
 
   .set-log-row{display:grid;grid-template-columns:34px 1fr 1fr auto;gap:10px;align-items:center;
     padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;}
@@ -381,8 +458,8 @@
 <script src="stats3d.js"></script>
 <script>
 /* ============ STATE ============ */
-let DB = { splits: [], exercises: [], sets: [], exerciseClassificationOverrides: {} };
-let state = { tab:'log', logDayId:null, logExerciseId:null, logDate:null, logHistoryDate:null, logHistoryOpen:false, splitEditId:null, splitViewId:null, progressSplitId:null, progressExerciseId:null, progressMetric:'weight', progressMode:'exercise', progressDaySessionDate:null, progressSplitAId:null, progressSplitBId:null, progressSplitSharedKey:null, statsRange:'week', statsSelectedGroup:null, statsExpanded:false };
+let DB = { splits: [], exercises: [], sets: [], exerciseClassificationOverrides: {}, exerciseDatabase: null };
+let state = { tab:'log', logDayId:null, logExerciseId:null, logDate:null, logHistoryDate:null, logHistoryOpen:false, splitEditId:null, splitViewId:null, splitViewMode:'list', splitGalleryDayIndex:0, progressSplitId:null, progressExerciseId:null, progressMetric:'weight', progressMode:'exercise', progressDaySessionDate:null, progressSplitAId:null, progressSplitBId:null, progressSplitSharedKey:null, statsRange:'week', statsSelectedGroup:null, statsExpanded:false };
 let DB_META = { lastAutoAssignDate:null };
 let charts = {};
 const $main = document.getElementById('main');
@@ -398,6 +475,7 @@ const EXERCISE_ALIAS_REPLACEMENTS = [
   [/\brdl\b/g,'romanian deadlift'], [/\brdl\b/g,'romanian deadlift'],
   [/\bcgbp\b/g,'close grip bench press'], [/\bskullcrushers?\b/g,'skull crusher']
 ];
+const EXERCISE_INTELLIGENCE_SCHEMA_VERSION = 1;
 let exerciseClassificationIndex = null;
 
 function normalizeExerciseName(name){
@@ -406,33 +484,69 @@ function normalizeExerciseName(name){
   EXERCISE_ALIAS_REPLACEMENTS.forEach(([re,rep])=>{ s=s.replace(re,rep); });
   return s.replace(/\s+/g,' ').trim();
 }
+function normalizeStatsGroup(group){
+  const normalized = String(group||'').trim().toLowerCase();
+  return STATS_GROUPS.includes(normalized) ? normalized : null;
+}
+function exactExerciseNameKey(name){
+  return String(name||'').toLowerCase().trim().replace(/\s+/g,' ');
+}
 function buildExerciseClassificationIndex(){
   exerciseClassificationIndex = new Map();
-  const records = (window.PLATE_PROGRESS_EXERCISE_DATABASE && window.PLATE_PROGRESS_EXERCISE_DATABASE.exercises) || [];
+  const bundled = (window.PLATE_PROGRESS_EXERCISE_DATABASE && window.PLATE_PROGRESS_EXERCISE_DATABASE.exercises) || [];
+  const local = (DB.exerciseDatabase && Array.isArray(DB.exerciseDatabase.exercises)) ? DB.exerciseDatabase.exercises : [];
+  // Imported records supplement the bundled catalog; when names overlap, imported
+  // records are considered first so a user can carry a corrected/custom database.
+  const records = [...local, ...bundled];
   records.forEach(r=>{
-    const key = r.normalized_name || normalizeExerciseName(r.name);
-    if(!key || !STATS_GROUPS.includes(r.radar_group)) return;
-    const existing = exerciseClassificationIndex.get(key);
-    if(!existing || ((r.sources||[]).includes('plate_progress') && !(existing.sources||[]).includes('plate_progress'))){
-      exerciseClassificationIndex.set(key,r);
-    }
+    // Catalog and user-entered names must use exactly the same canonical path.
+    // `normalized_name` is retained as source metadata, but earlier catalog data
+    // contains punctuation/whitespace variants that are not safe lookup keys.
+    const key = normalizeExerciseName(r.name);
+    if(!key || !normalizeStatsGroup(r.radar_group)) return;
+    const recordsForKey = exerciseClassificationIndex.get(key) || [];
+    recordsForKey.push(r);
+    exerciseClassificationIndex.set(key,recordsForKey);
   });
 }
-function builtInExerciseClassification(name){
+function builtInExerciseRecord(name){
   if(!exerciseClassificationIndex) buildExerciseClassificationIndex();
-  const record = exerciseClassificationIndex.get(normalizeExerciseName(name));
-  return record && STATS_GROUPS.includes(record.radar_group) ? record.radar_group : null;
+  const records = exerciseClassificationIndex.get(normalizeExerciseName(name)) || [];
+  if(!records.length) return null;
+  // A few catalog names collapse to one canonical key (for example, punctuation
+  // variants). Preserve exact catalog-name recognition before applying the
+  // established Plate & Progress source preference for an ambiguous alias.
+  const exact = records.find(r=>exactExerciseNameKey(r.name)===exactExerciseNameKey(name));
+  return exact || records.find(r=>(r.sources||[]).includes('plate_progress')) || records[0];
+}
+// Foundation for future intelligence providers. Current behavior deliberately
+// remains exact catalog recognition plus persistent manual classification only.
+function resolveExerciseIntelligence(name){
+  const key = normalizeExerciseName(name);
+  const override = DB.exerciseClassificationOverrides && DB.exerciseClassificationOverrides[key];
+  if(override && STATS_GROUPS.includes(override.group)){
+    return { group:override.group, source:'manual', recordId:null,
+      resolvedAt:override.updatedAt || null,
+      schemaVersion:override.schemaVersion || 0 };
+  }
+  const record = builtInExerciseRecord(name);
+  const group = record && normalizeStatsGroup(record.radar_group);
+  if(group){
+    return { group, source:'database', recordId:record.id || null,
+      resolvedAt:null, schemaVersion:EXERCISE_INTELLIGENCE_SCHEMA_VERSION };
+  }
+  return { group:null, source:'unknown', recordId:null,
+    resolvedAt:null, schemaVersion:EXERCISE_INTELLIGENCE_SCHEMA_VERSION };
+}
+function builtInExerciseClassification(name){
+  const record = builtInExerciseRecord(name);
+  return record ? normalizeStatsGroup(record.radar_group) : null;
 }
 function classifyExercise(name){
-  const key = normalizeExerciseName(name);
-  const override = DB.exerciseClassificationOverrides && DB.exerciseClassificationOverrides[key];
-  return override && STATS_GROUPS.includes(override.group) ? override.group : builtInExerciseClassification(name);
+  return resolveExerciseIntelligence(name).group;
 }
 function classificationSource(name){
-  const key = normalizeExerciseName(name);
-  const override = DB.exerciseClassificationOverrides && DB.exerciseClassificationOverrides[key];
-  if(override && STATS_GROUPS.includes(override.group)) return 'manual';
-  return builtInExerciseClassification(name) ? 'database' : 'unknown';
+  return resolveExerciseIntelligence(name).source;
 }
 function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function fmtDate(s){ const d=new Date(s+'T00:00:00'); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
@@ -469,13 +583,13 @@ function idbSet(key,value){
 async function loadAll(){
   try{
     await openDB();
-    const [s,e,st,ov,meta]=await Promise.all([idbGet('splits'),idbGet('exercises'),idbGet('sets'),idbGet('exerciseClassificationOverrides'),idbGet('appMeta')]);
-    DB.splits=s||[]; DB.exercises=e||[]; DB.sets=st||[]; DB.exerciseClassificationOverrides=ov||{};
+    const [s,e,st,ov,meta,exdb]=await Promise.all([idbGet('splits'),idbGet('exercises'),idbGet('sets'),idbGet('exerciseClassificationOverrides'),idbGet('appMeta'),idbGet('exerciseDatabase')]);
+    DB.splits=s||[]; DB.exercises=e||[]; DB.sets=st||[]; DB.exerciseClassificationOverrides=ov||{}; DB.exerciseDatabase=exdb||null;
     DB_META = meta || { lastAutoAssignDate:null };
     buildExerciseClassificationIndex();
     ensureExerciseOrder();
     if(ensureSplitDayHistory()) await idbSet('splits',DB.splits);
-  }catch(err){ console.error('IndexedDB load failed',err); DB={splits:[],exercises:[],sets:[],exerciseClassificationOverrides:{}}; toast('Could not open local storage'); }
+  }catch(err){ console.error('IndexedDB load failed',err); DB={splits:[],exercises:[],sets:[],exerciseClassificationOverrides:{},exerciseDatabase:null}; toast('Could not open local storage'); }
 }
 // One-time migration: give any exercise missing an `order` a sequential value within its day,
 // so existing splits (created before drag-reorder existed) sort predictably.
@@ -525,9 +639,48 @@ function importBackup(){
       const parsed=JSON.parse(await file.text());
       if(!parsed.data || !Array.isArray(parsed.data.splits) || !Array.isArray(parsed.data.exercises) || !Array.isArray(parsed.data.sets)) throw new Error('Invalid backup');
       if(!confirm('Import this backup and replace the current local data?')) return;
-      DB={splits:parsed.data.splits,exercises:parsed.data.exercises,sets:parsed.data.sets,exerciseClassificationOverrides:parsed.data.exerciseClassificationOverrides||{}};
-      await Promise.all(['splits','exercises','sets','exerciseClassificationOverrides'].map(save)); render(); toast('Backup imported');
+      DB={splits:parsed.data.splits,exercises:parsed.data.exercises,sets:parsed.data.sets,exerciseClassificationOverrides:parsed.data.exerciseClassificationOverrides||{},exerciseDatabase:parsed.data.exerciseDatabase||null};
+      await Promise.all(['splits','exercises','sets','exerciseClassificationOverrides'].map(save));
+      await idbSet('exerciseDatabase',DB.exerciseDatabase); render(); toast('Backup imported');
     }catch(err){ console.error(err); toast('Invalid backup file'); }
+  }; input.click();
+}
+async function exportExerciseDatabase(){
+  const bundled=(window.PLATE_PROGRESS_EXERCISE_DATABASE && window.PLATE_PROGRESS_EXERCISE_DATABASE.exercises) || [];
+  const local=(DB.exerciseDatabase && Array.isArray(DB.exerciseDatabase.exercises)) ? DB.exerciseDatabase.exercises : null;
+  const payload={
+    version:1,
+    app:'Plate & Progress Exercise Database',
+    exportedAt:new Date().toISOString(),
+    exercises: local || bundled,
+    manualClassifications: DB.exerciseClassificationOverrides || {}
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='plate-progress-exercise-database-'+todayStr()+'.json'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000); toast('Exercise database exported');
+}
+function importExerciseDatabase(){
+  const input=document.createElement('input'); input.type='file'; input.accept='.json,application/json';
+  input.onchange=async()=>{
+    const file=input.files&&input.files[0]; if(!file) return;
+    try{
+      const parsed=JSON.parse(await file.text());
+      const exercises=Array.isArray(parsed.exercises) ? parsed.exercises : null;
+      if(!exercises || !exercises.length) throw new Error('Invalid exercise database');
+      const valid=exercises.filter(r=>r && typeof r.name==='string' && normalizeStatsGroup(r.radar_group));
+      if(!valid.length) throw new Error('No supported exercises found');
+      if(!confirm(`Import ${valid.length.toLocaleString()} exercises as the local exercise database? This replaces the currently imported local database, but does not change your workout history. The built-in database remains available as a fallback.`)) return;
+      DB.exerciseDatabase={version:1,importedAt:new Date().toISOString(),sourceName:file.name,exercises:valid};
+      if(parsed.manualClassifications && typeof parsed.manualClassifications==='object'){
+        DB.exerciseClassificationOverrides={...DB.exerciseClassificationOverrides,...parsed.manualClassifications};
+        await save('exerciseClassificationOverrides');
+      }
+      buildExerciseClassificationIndex();
+      await idbSet('exerciseDatabase',DB.exerciseDatabase);
+      render();
+      toast(`Exercise database imported (${valid.length.toLocaleString()})`);
+    }catch(err){ console.error(err); toast('Invalid exercise database file'); }
   }; input.click();
 }
 function registerPWA(){
@@ -660,6 +813,9 @@ function render(){
   else if(state.tab==='split') renderSplit();
   else if(state.tab==='progress') renderProgress();
   else if(state.tab==='stats') renderStats();
+  // Keep the maximized Gallery overlay (lives outside #main) in sync with any
+  // data-changing action anywhere in the app, since those all funnel through render().
+  if(typeof galleryMaximizeOpen!=='undefined' && galleryMaximizeOpen) refreshGalleryMaximizeOverlay();
 }
 
 /* ============ TAB SWITCHING + SWIPE TRANSITION ============ */
@@ -670,6 +826,7 @@ function render(){
 let tabSwitching = false;
 function goToTab(newTab){
   if(newTab===state.tab || tabSwitching) return;
+  if(galleryMaximizeOpen) closeGalleryMaximize(); // never leave Split with the overlay still open
   const oldIdx = TAB_ORDER.indexOf(state.tab);
   const newIdx = TAB_ORDER.indexOf(newTab);
   const forward = newIdx > oldIdx;
@@ -705,11 +862,15 @@ document.querySelectorAll('.navbtn').forEach(b=>{
   document.addEventListener('touchstart', e=>{
     if(e.touches.length!==1) return;
     if($modalRoot.innerHTML.trim()!=='') return; // a modal is open, don't hijack its gestures
+    if(galleryMaximizeOpen) return; // maximized Gallery overlay owns all gestures while open
     const t = e.target;
     // Protect controls and horizontally-scrollable areas. Exercise rows themselves
     // remain swipeable; vertical movement is handed back to scrolling/drag-reorder.
+    // The Gallery card track owns its own horizontal drag (day swipe) — never let the
+    // tab-swipe gesture compete with it.
     if(t.closest('.day-scroll') || t.closest('.chart-wrap') || t.closest('.segmented') ||
-       t.closest('select') || t.closest('input') || t.closest('button') || t.closest('.stats3d-wrap')) return;
+       t.closest('select') || t.closest('input') || t.closest('button') || t.closest('.stats3d-wrap') ||
+       t.closest('.split-gallery-track') || t.closest('#gallery-max-overlay')) return;
     const touch = e.touches[0];
     sx=touch.clientX; sy=touch.clientY; st=Date.now(); tracking=true;
   }, {passive:true});
@@ -901,7 +1062,9 @@ function openMuscleClassificationModal(exerciseName, onSelect){
 async function saveExerciseClassification(name, group){
   const key=normalizeExerciseName(name);
   if(!key || !STATS_GROUPS.includes(group)) return;
-  DB.exerciseClassificationOverrides[key]={group,updatedAt:new Date().toISOString()};
+  // Legacy `{group, updatedAt}` overrides remain readable; new writes add
+  // version/source metadata without changing the override key or behavior.
+  DB.exerciseClassificationOverrides[key]={group,source:'manual',schemaVersion:EXERCISE_INTELLIGENCE_SCHEMA_VERSION,updatedAt:new Date().toISOString()};
   await save('exerciseClassificationOverrides');
 }
 
@@ -1069,11 +1232,315 @@ function confirmRemoveExercise(ex){
   };
 }
 
+/* ============ SHARED: render a single day's card (used by List AND Gallery) ============
+   One function, one markup source — List and Gallery are two presentations of the exact
+   same day/exercise data. `opts.scrollable` switches on the fixed-window flex/scroll
+   wrapper used only in Gallery; List mode renders identically to before. */
+function renderDayCard(day, animateClass='', opts={}){
+  const exs = exercisesOfDay(day.id);
+  const listHtml = exs.length===0 ? `<p style="font-size:12.5px;color:var(--text-faint);padding:6px 0;">No exercises yet.</p>` :
+    `<div class="exercise-list" data-daylist="${day.id}">` +
+    exs.map(ex=>{
+      const sets = setsOfExercise(ex.id);
+      const last = sets[sets.length-1];
+      return `<div class="exercise-row" data-exid="${ex.id}">
+        <div class="grip" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="exname">
+          <div class="name">${esc(ex.name)}</div>
+          <div class="meta">${sets.length} set${sets.length===1?'':'s'} logged${last? ' &middot; last '+fmtDate(last.date):''}</div>
+          <button class="classification-btn" data-classifyex="${ex.id}">${classifyExercise(ex.name) ? STATS_LABELS[classifyExercise(ex.name)] + (classificationSource(ex.name)==='manual' ? ' · custom' : '') : 'Classify muscle group'}</button>
+        </div>
+        <button class="icon-btn" data-delex="${ex.id}"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0-1 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>`;
+    }).join('') +
+    `</div>`;
+  const header = `<div class="row-between" style="margin-bottom:8px;">
+    <h3 style="font-size:14px;">${esc(day.name)}</h3>
+    <button class="btn btn-ghost btn-sm" data-addex="${day.id}">+ Exercise</button>
+  </div>`;
+  if(opts.scrollable){
+    return `<div class="card split-day-card gallery-card-flex ${animateClass}" data-gallery-day="${day.id}">
+      ${header}
+      <div class="gallery-scroll">${listHtml}</div>
+    </div>`;
+  }
+  return `<div class="card split-day-card ${animateClass}" data-gallery-day="${day.id}">
+    ${header}
+    ${listHtml}
+  </div>`;
+}
+
+// Binds Add/Archive/Classify handlers for every exercise card action found under `root`.
+// Used for the List/Gallery region inside $main AND for the maximized overlay (which lives
+// outside $main), so there is exactly one implementation of these actions everywhere.
+function bindExerciseCardActions(root, splitId){
+  root.querySelectorAll('[data-addex]').forEach(b=> b.onclick = ()=> openExerciseModal(splitId, b.dataset.addex));
+  root.querySelectorAll('[data-delex]').forEach(b=> b.onclick = ()=> confirmRemoveExercise(exerciseById(b.dataset.delex)));
+  root.querySelectorAll('[data-classifyex]').forEach(b=> b.onclick = e=>{
+    e.stopPropagation();
+    const ex=exerciseById(b.dataset.classifyex);
+    if(ex) openMuscleClassificationModal(ex.name, async group=>{
+      await saveExerciseClassification(ex.name, group);
+      render();
+      toast('Muscle group updated');
+    });
+  });
+}
+
+// Builds the fixed-window card-stack markup (viewport + track + nav + hint). Used both for
+// the normal in-page Gallery and for the maximized overlay — same function, same day data,
+// just a different idPrefix so the two DOM trees never collide.
+function buildGalleryHtml(split, idPrefix, opts={}){
+  const days = split.days||[];
+  const dayIndex = state.splitGalleryDayIndex;
+  const day = days[dayIndex];
+  const prevDay = dayIndex>0 ? days[dayIndex-1] : null;
+  const nextDay = dayIndex<days.length-1 ? days[dayIndex+1] : null;
+  const maximized = !!opts.maximized;
+  return `<div class="split-gallery-viewport">
+    <div class="split-gallery-shell">
+      <div class="split-gallery-track" id="${idPrefix}-track">
+        ${prevDay ? renderDayCard(prevDay,'is-stack-prev',{scrollable:true}) : ''}
+        ${nextDay ? renderDayCard(nextDay,'is-stack-next',{scrollable:true}) : ''}
+        ${day ? renderDayCard(day,'',{scrollable:true}) : ''}
+      </div>
+      ${!maximized ? `<button class="split-gallery-maxbtn" id="${idPrefix}-maxbtn" aria-label="Maximize gallery" title="Maximize"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : ''}
+      <div class="gallery-progress-pill" id="${idPrefix}-progress"></div>
+      ${maximized && days.length>1 ? `
+        <div class="fold-handle fold-tr" id="${idPrefix}-fold-tr" aria-label="Fold corner to go to next day"></div>
+        <div class="fold-handle fold-tl" id="${idPrefix}-fold-tl" aria-label="Fold corner to go to previous day"></div>
+        <div class="fold-flap fold-flap-tr" id="${idPrefix}-flap-tr"></div>
+        <div class="fold-flap fold-flap-tl" id="${idPrefix}-flap-tl"></div>` : ''}
+    </div>
+  </div>
+  <div class="split-gallery-nav">
+    <button class="split-gallery-arrow" id="${idPrefix}-prev" aria-label="Previous day" ${dayIndex===0?'disabled':''}>
+      <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="split-gallery-position" aria-label="Day position">
+      ${days.map((_,i)=>`<span class="split-gallery-dot ${i===dayIndex?'active':''}"></span>`).join('')}
+    </div>
+    <button class="split-gallery-arrow" id="${idPrefix}-next" aria-label="Next day" ${dayIndex===days.length-1?'disabled':''}>
+      <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+  ${days.length>1 ? `<p class="split-gallery-hint">${maximized ? 'Swipe, use the arrows, or fold a corner to change day' : 'Swipe left or right to view another day'}</p>` : ''}`;
+}
+
+// Wires up everything interactive for one Gallery instance: exercise reorder (reusing the
+// exact List-mode reorder system), arrow buttons, drag-to-swipe card physics, and — in
+// maximized mode — the paper-fold corner gesture and keyboard arrows. idPrefix scopes all
+// DOM lookups so the same logic can run for the in-page Gallery and the maximized overlay
+// without the two ever touching each other's elements.
+function bindGallery(split, idPrefix, opts={}){
+  const days = split.days||[];
+  const track = document.getElementById(idPrefix+'-track');
+  if(!track) return;
+  const maximized = !!opts.maximized;
+  const activeDayId = days[state.splitGalleryDayIndex]?.id||'';
+  const activeCard = track.querySelector('.split-day-card[data-gallery-day="'+activeDayId+'"]');
+  if(activeCard){
+    const activeList = activeCard.querySelector('.exercise-list[data-daylist]');
+    if(activeList) attachExerciseReorder(activeList, activeList.dataset.daylist);
+  }
+
+  let galleryTransitioning=false;
+  const showProgressPill=(text)=>{
+    const pill=document.getElementById(idPrefix+'-progress');
+    if(!pill) return;
+    if(text){ pill.textContent=text; pill.classList.add('show'); } else pill.classList.remove('show');
+  };
+  const setStackReveal=(amount)=>{
+    const abs=Math.min(1,Math.abs(amount)/110);
+    const revealScale=.97 + (.03*abs), revealY=12*(1-abs), revealOpacity=.62 + (.38*abs);
+    track.querySelectorAll('.split-day-card.is-stack-next,.split-day-card.is-stack-prev').forEach(card=>{
+      card.style.transform=`translate3d(0,${revealY}px,0) scale(${revealScale})`; card.style.opacity=String(revealOpacity);
+    });
+  };
+  const resetStack=()=>track.querySelectorAll('.split-day-card.is-stack-next,.split-day-card.is-stack-prev').forEach(card=>{card.style.removeProperty('transform');card.style.removeProperty('opacity');card.classList.remove('stack-reveal');});
+  const animateToDay=(nextIndex,direction)=>{
+    if(galleryTransitioning || nextIndex<0 || nextIndex>=days.length || nextIndex===state.splitGalleryDayIndex) return false;
+    const current=track.querySelector('.split-day-card[data-gallery-day="'+days[state.splitGalleryDayIndex].id+'"]');
+    const incoming=track.querySelector('.split-day-card[data-gallery-day="'+days[nextIndex].id+'"]');
+    if(!current || !incoming){ state.splitGalleryDayIndex=nextIndex; render(); return true; }
+    galleryTransitioning=true; const sign=direction==='next'?-1:1;
+    current.classList.add('gallery-fly'); incoming.classList.add('stack-reveal','gallery-promote');
+    incoming.style.transform='translate3d(0,0,0) scale(1)'; incoming.style.opacity='1';
+    current.style.transform=`translate3d(${sign*118}%,0,0) rotate(${sign*4}deg)`; current.style.opacity='.05';
+    if(navigator.vibrate) navigator.vibrate(8);
+    setTimeout(()=>{ state.splitGalleryDayIndex=nextIndex; render(); },300);
+    return true;
+  };
+
+  const prevBtn=document.getElementById(idPrefix+'-prev'), nextBtn=document.getElementById(idPrefix+'-next');
+  if(prevBtn) prevBtn.onclick=()=>animateToDay(state.splitGalleryDayIndex-1,'prev');
+  if(nextBtn) nextBtn.onclick=()=>animateToDay(state.splitGalleryDayIndex+1,'next');
+  const maxBtn=document.getElementById(idPrefix+'-maxbtn');
+  if(maxBtn) maxBtn.onclick=()=>openGalleryMaximize(split.id);
+
+  if(track && days.length>1 && activeCard){
+    let pointerId=null,startX=0,startY=0,dragging=false,axisLocked=false,swipeStarted=false; const threshold=72;
+    const isInteractive=e=>!!e.target.closest('button,select,input,a,.exercise-row,.fold-handle');
+    track.addEventListener('pointerdown',e=>{
+      if(isInteractive(e)) return; if(e.pointerType==='mouse'&&e.button!==0)return;
+      pointerId=e.pointerId;startX=e.clientX;startY=e.clientY;dragging=true;axisLocked=false;swipeStarted=false;activeCard.classList.add('gallery-dragging');track.setPointerCapture?.(pointerId);
+    });
+    track.addEventListener('pointermove',e=>{
+      if(!dragging||e.pointerId!==pointerId||galleryTransitioning)return; const dx=e.clientX-startX,dy=e.clientY-startY;
+      if(!axisLocked){if(Math.abs(dx)<8&&Math.abs(dy)<8)return;if(Math.abs(dy)>Math.abs(dx)){dragging=false;activeCard.classList.remove('gallery-dragging');track.releasePointerCapture?.(pointerId);return;}axisLocked=true;}
+      swipeStarted=true;const limited=Math.max(-150,Math.min(150,dx));activeCard.style.transform=`translate3d(${limited}px,0,0) rotate(${limited/42}deg)`;activeCard.style.opacity=String(1-Math.min(.5,Math.abs(limited)/300));setStackReveal(limited);
+      const target=limited<0?state.splitGalleryDayIndex+1:state.splitGalleryDayIndex-1;
+      showProgressPill(Math.abs(limited)>=threshold && target>=0 && target<days.length ? (limited<0?'Release for next day':'Release for previous day') : null);
+    });
+    const finishPointer=(e,cancelled=false)=>{
+      if(!dragging||e.pointerId!==pointerId)return;dragging=false;track.releasePointerCapture?.(pointerId);activeCard.classList.remove('gallery-dragging');
+      const dx=e.clientX-startX,dy=e.clientY-startY,target=dx<0?state.splitGalleryDayIndex+1:state.splitGalleryDayIndex-1;
+      showProgressPill(null);
+      if(!cancelled&&swipeStarted&&Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>=threshold&&target>=0&&target<days.length){animateToDay(target,dx<0?'next':'prev');return;}
+      activeCard.classList.add('gallery-snap');activeCard.style.transform='translate3d(0,0,0) rotate(0deg)';activeCard.style.opacity='1';setStackReveal(0);
+      setTimeout(()=>{activeCard.classList.remove('gallery-snap');resetStack();},300);
+    };
+    track.addEventListener('pointerup',e=>finishPointer(e,false));track.addEventListener('pointercancel',e=>finishPointer(e,true));
+  }
+
+  // Paper-fold corners — maximized mode only. Starts strictly on the small corner
+  // handle element, so it never competes with the horizontal swipe-the-whole-card
+  // gesture or the long-press exercise-reorder gesture above.
+  if(maximized && activeCard && days.length>1){
+    bindFoldCorner(idPrefix,'tr','next',track,activeCard,days,animateToDay,showProgressPill);
+    bindFoldCorner(idPrefix,'tl','prev',track,activeCard,days,animateToDay,showProgressPill);
+  }
+
+  if(maximized){
+    if(_galleryKeyHandler) document.removeEventListener('keydown', _galleryKeyHandler);
+    _galleryKeyHandler = e=>{
+      if(e.key==='ArrowLeft') animateToDay(state.splitGalleryDayIndex-1,'prev');
+      else if(e.key==='ArrowRight') animateToDay(state.splitGalleryDayIndex+1,'next');
+      else if(e.key==='Escape') closeGalleryMaximize();
+    };
+    document.addEventListener('keydown', _galleryKeyHandler);
+  }
+}
+
+// One corner's fold-to-turn-the-page gesture. Dragging the small corner handle peels a
+// triangular "flap" back and tilts the card in 3D; crossing ~42% of the card's shortest
+// dimension commits to changing the day (the card finishes rotating away, then the next
+// day becomes front); releasing before that snaps the flap back flat with no day change.
+function bindFoldCorner(idPrefix,corner,direction,track,activeCard,days,animateToDay,showProgressPill){
+  const handle = document.getElementById(idPrefix+'-fold-'+corner);
+  const flap = document.getElementById(idPrefix+'-flap-'+corner);
+  if(!handle || !flap) return;
+  let dragging=false, pointerId=null, maxDiag=140, triggered=false;
+  const canGo = ()=> direction==='next' ? state.splitGalleryDayIndex<days.length-1 : state.splitGalleryDayIndex>0;
+  const reset=(animated)=>{
+    flap.style.transition = animated ? 'width .2s ease,height .2s ease,opacity .2s ease' : '';
+    flap.style.width='0'; flap.style.height='0'; flap.style.opacity='0'; flap.style.clipPath='';
+    activeCard.style.transition = animated ? 'transform .2s ease' : '';
+    activeCard.style.transform=''; activeCard.style.opacity='1';
+    showProgressPill(null);
+    if(animated) setTimeout(()=>{ flap.style.transition=''; activeCard.style.transition=''; },200);
+  };
+  handle.onpointerdown = e=>{
+    if(!canGo()){ if(navigator.vibrate) navigator.vibrate(6); return; }
+    const rect = activeCard.getBoundingClientRect();
+    maxDiag = Math.max(80, Math.min(rect.width, rect.height));
+    dragging=true; triggered=false; pointerId=e.pointerId;
+    handle.setPointerCapture?.(pointerId);
+    activeCard.classList.add('gallery-dragging');
+  };
+  handle.onpointermove = e=>{
+    if(!dragging || e.pointerId!==pointerId) return;
+    const rect = activeCard.getBoundingClientRect();
+    const cx = corner==='tr' ? rect.right : rect.left, cy = rect.top;
+    const dx = e.clientX-cx, dy = e.clientY-cy;
+    const diag = Math.max(0, Math.min(maxDiag*0.75, Math.hypot(dx,dy)));
+    const pct = diag/maxDiag;
+    flap.style.width = diag+'px'; flap.style.height = diag+'px'; flap.style.opacity = String(Math.min(.95, pct*2));
+    flap.style.clipPath = corner==='tr'
+      ? `polygon(100% 0, ${Math.max(0,100-pct*100)}% 0, 100% ${Math.min(100,pct*100)}%)`
+      : `polygon(0 0, ${Math.min(100,pct*100)}% 0, 0 ${Math.min(100,pct*100)}%)`;
+    activeCard.style.transform = corner==='tr' ? `perspective(900px) rotateY(${-pct*11}deg)` : `perspective(900px) rotateY(${pct*11}deg)`;
+    triggered = pct>0.42;
+    showProgressPill(triggered ? (direction==='next'?'Release for next day':'Release for previous day') : null);
+  };
+  const finish = ()=>{
+    if(!dragging) return; dragging=false;
+    activeCard.classList.remove('gallery-dragging');
+    if(triggered){
+      const targetIndex = direction==='next' ? state.splitGalleryDayIndex+1 : state.splitGalleryDayIndex-1;
+      flap.style.transition='width .22s ease,height .22s ease,opacity .22s ease';
+      flap.style.width='100%'; flap.style.height='100%'; flap.style.opacity='1';
+      activeCard.style.transition='transform .24s ease, opacity .24s ease';
+      activeCard.style.transform = corner==='tr' ? 'perspective(900px) rotateY(-85deg)' : 'perspective(900px) rotateY(85deg)';
+      activeCard.style.opacity='.12';
+      showProgressPill(null);
+      if(navigator.vibrate) navigator.vibrate(14);
+      setTimeout(()=>{
+        const clamped = Math.max(0, Math.min(days.length-1, targetIndex));
+        flap.style.transition=''; flap.style.width='0'; flap.style.height='0'; flap.style.opacity='0'; flap.style.clipPath='';
+        activeCard.style.transition=''; activeCard.style.transform=''; activeCard.style.opacity='1';
+        if(clamped!==state.splitGalleryDayIndex){ state.splitGalleryDayIndex=clamped; render(); }
+      },240);
+    } else {
+      reset(true);
+    }
+  };
+  handle.onpointerup = finish;
+  handle.onpointercancel = finish;
+}
+
+/* ============ MAXIMIZED GALLERY OVERLAY ============ */
+let galleryMaximizeOpen = false;
+let _galleryKeyHandler = null;
+function openGalleryMaximize(splitId){
+  if(galleryMaximizeOpen) return;
+  const split = splitById(splitId); if(!split) return;
+  galleryMaximizeOpen = true;
+  const overlay = document.createElement('div');
+  overlay.id = 'gallery-max-overlay';
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+  renderGalleryMaximizeContent(split);
+}
+function renderGalleryMaximizeContent(split){
+  const overlay = document.getElementById('gallery-max-overlay');
+  if(!overlay) return;
+  overlay.innerHTML = `
+    <div class="gmax-header">
+      <span class="gmax-title">${esc(split.name)} &middot; Gallery</span>
+      <button class="gmax-close" id="gmax-close" aria-label="Close maximized gallery"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="gmax-body">${buildGalleryHtml(split, 'gmax', {maximized:true})}</div>`;
+  document.getElementById('gmax-close').onclick = closeGalleryMaximize;
+  bindExerciseCardActions(overlay, split.id);
+  bindGallery(split, 'gmax', {maximized:true});
+}
+// Called from the root render() dispatcher so ANY data-changing action anywhere in the app
+// (add/archive/classify/reorder/rename, all of which already call the global render()) keeps
+// the maximized overlay in sync automatically — no separate Gallery-only refresh path needed.
+function refreshGalleryMaximizeOverlay(){
+  if(!galleryMaximizeOpen) return;
+  const split = splitById(state.splitViewId) || activeSplit() || DB.splits[0];
+  if(!split){ closeGalleryMaximize(); return; }
+  renderGalleryMaximizeContent(split);
+}
+function closeGalleryMaximize(){
+  if(!galleryMaximizeOpen) return;
+  galleryMaximizeOpen = false;
+  const overlay = document.getElementById('gallery-max-overlay');
+  if(overlay) overlay.remove();
+  document.body.style.overflow = '';
+  if(_galleryKeyHandler){ document.removeEventListener('keydown', _galleryKeyHandler); _galleryKeyHandler=null; }
+}
+
 /* ============ TAB: SPLIT ============ */
 function renderSplit(){
   if(!DB.splits.length){ setHeader('Your routine','No split yet',null,null); renderOnboarding(); return; }
   if(!state.splitViewId || !DB.splits.some(s=>s.id===state.splitViewId)) state.splitViewId = (activeSplit()||DB.splits[0]).id;
   const split = splitById(state.splitViewId);
+  if(!state.splitViewMode) state.splitViewMode = 'list';
+  if(!Number.isInteger(state.splitGalleryDayIndex)) state.splitGalleryDayIndex = 0;
+  state.splitGalleryDayIndex = Math.max(0, Math.min(state.splitGalleryDayIndex, Math.max(0, (split.days||[]).length-1)));
 
   setHeader('Your routine', split.name,
     '<svg viewBox="0 0 24 24"><path d="M4 21v-3.5L16.5 5a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8L7.5 21.5H4z" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -1089,33 +1556,21 @@ function renderSplit(){
     ${split.archivedAt
       ? `<button class="log-date-today" id="btn-setactive">Make active</button>`
       : `<span class="split-active-tag">&bull; active</span>`}
+    <div class="split-view-toggle" role="group" aria-label="Split view">
+      <button class="split-view-btn ${state.splitViewMode==='list'?'active':''}" id="split-view-list" aria-pressed="${state.splitViewMode==='list'}">
+        <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke-linecap="round"/></svg> List
+      </button>
+      <button class="split-view-btn ${state.splitViewMode==='gallery'?'active':''}" id="split-view-gallery" aria-pressed="${state.splitViewMode==='gallery'}">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.3"/><path d="m5 17 4.5-4 3 2.5 2.5-2.5L19 17" stroke-linecap="round" stroke-linejoin="round"/></svg> Gallery
+      </button>
+    </div>
   </div>`;
 
-  split.days.forEach(day=>{
-    const exs = exercisesOfDay(day.id);
-    html += `<div class="card">
-      <div class="row-between" style="margin-bottom:8px;">
-        <h3 style="font-size:14px;">${esc(day.name)}</h3>
-        <button class="btn btn-ghost btn-sm" data-addex="${day.id}">+ Exercise</button>
-      </div>
-      ${exs.length===0 ? `<p style="font-size:12.5px;color:var(--text-faint);padding:6px 0;">No exercises yet.</p>` :
-        `<div class="exercise-list" data-daylist="${day.id}">` +
-        exs.map(ex=>{
-          const sets = setsOfExercise(ex.id);
-          const last = sets[sets.length-1];
-          return `<div class="exercise-row" data-exid="${ex.id}">
-            <div class="grip" aria-hidden="true"><span></span><span></span><span></span></div>
-            <div class="exname">
-              <div class="name">${esc(ex.name)}</div>
-              <div class="meta">${sets.length} set${sets.length===1?'':'s'} logged${last? ' &middot; last '+fmtDate(last.date):''}</div>
-              <button class="classification-btn" data-classifyex="${ex.id}">${classifyExercise(ex.name) ? STATS_LABELS[classifyExercise(ex.name)] + (classificationSource(ex.name)==='manual' ? ' · custom' : '') : 'Classify muscle group'}</button>
-            </div>
-            <button class="icon-btn" data-delex="${ex.id}"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0-1 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-          </div>`;
-        }).join('') +
-        `</div>`}
-    </div>`;
-  });
+  if(state.splitViewMode==='gallery'){
+    html += buildGalleryHtml(split, 'split-gallery', {maximized:false});
+  }else{
+    split.days.forEach(day=>{ html += renderDayCard(day,'',{scrollable:false}); });
+  }
 
   html += `<button class="btn btn-block" id="btn-newsplit" style="margin-top:6px;">Start a new split</button>
     <p style="font-size:11px;color:var(--text-faint);text-align:center;margin:8px 0 18px;">This archives your current split and its history, then starts fresh.</p>
@@ -1123,6 +1578,8 @@ function renderSplit(){
       <div class="card-title">Local backup</div>
       <p style="font-size:12px;color:var(--text-faint);line-height:1.45;margin:0 0 10px;">Your workout data is stored on this device. Export a backup before clearing browser data or changing phones.</p>
       <div class="field-grid"><button class="btn" id="btn-export">Export backup</button><button class="btn" id="btn-import">Import backup</button></div>
+      <p style="font-size:12px;color:var(--text-faint);line-height:1.45;margin:12px 0 10px;">Move the exercise database separately between devices. This does not replace your workout backup.</p>
+      <div class="field-grid"><button class="btn" id="btn-export-exdb">Export exercise database</button><button class="btn" id="btn-import-exdb">Import exercise database</button></div>
     </div>`;
 
   const archived = DB.splits.filter(s=>s.archivedAt).sort((a,b)=> b.archivedAt.localeCompare(a.archivedAt));
@@ -1147,21 +1604,13 @@ function renderSplit(){
 
   $main.innerHTML = html;
 
-  document.querySelectorAll('[data-addex]').forEach(b=> b.onclick = ()=> openExerciseModal(split.id, b.dataset.addex));
-  document.querySelectorAll('[data-delex]').forEach(b=> b.onclick = ()=> confirmRemoveExercise(exerciseById(b.dataset.delex)));
-  document.querySelectorAll('[data-classifyex]').forEach(b=> b.onclick = e=>{
-    e.stopPropagation();
-    const ex=exerciseById(b.dataset.classifyex);
-    if(ex) openMuscleClassificationModal(ex.name, async group=>{
-      await saveExerciseClassification(ex.name, group);
-      render();
-      toast('Muscle group updated');
-    });
-  });
+  bindExerciseCardActions(document, split.id);
   const nsBtn = document.getElementById('btn-newsplit');
   if(nsBtn) nsBtn.onclick = ()=> openSplitModal(null);
   const exportBtn=document.getElementById('btn-export'); if(exportBtn) exportBtn.onclick=exportBackup;
   const importBtn=document.getElementById('btn-import'); if(importBtn) importBtn.onclick=importBackup;
+  const exportExDbBtn=document.getElementById('btn-export-exdb'); if(exportExDbBtn) exportExDbBtn.onclick=exportExerciseDatabase;
+  const importExDbBtn=document.getElementById('btn-import-exdb'); if(importExDbBtn) importExDbBtn.onclick=importExerciseDatabase;
   document.querySelectorAll('[data-viewarchive]').forEach(b=> b.onclick = ()=>{
     state.tab='progress'; state.progressSplitId=b.dataset.viewarchive; state.progressExerciseId=null; render();
   });
@@ -1170,13 +1619,19 @@ function renderSplit(){
     confirmDeleteSplit(splitById(b.dataset.delsplit));
   });
   const switcher = document.getElementById('split-switcher');
-  if(switcher) switcher.onchange = e=>{ state.splitViewId = e.target.value; render(); };
+  if(switcher) switcher.onchange = e=>{ state.splitViewId = e.target.value; state.splitGalleryDayIndex=0; render(); };
   const setActiveBtn = document.getElementById('btn-setactive');
   if(setActiveBtn) setActiveBtn.onclick = ()=> switchToSplit(split.id);
+  const listBtn=document.getElementById('split-view-list');
+  const galleryBtn=document.getElementById('split-view-gallery');
+  if(listBtn) listBtn.onclick=()=>{ state.splitViewMode='list'; render(); };
+  if(galleryBtn) galleryBtn.onclick=()=>{ state.splitViewMode='gallery'; state.splitGalleryDayIndex=0; render(); };
 
-  document.querySelectorAll('.exercise-list[data-daylist]').forEach(list=>{
-    attachExerciseReorder(list, list.dataset.daylist);
-  });
+  if(state.splitViewMode==='list'){
+    document.querySelectorAll('.exercise-list[data-daylist]').forEach(list=> attachExerciseReorder(list, list.dataset.daylist));
+  }else{
+    bindGallery(split, 'split-gallery', {maximized:false});
+  }
 }
 
 /* ============ LONG-PRESS REORDER (Split tab exercise lists) ============ */
