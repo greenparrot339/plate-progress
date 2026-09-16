@@ -511,6 +511,17 @@ function normalizeExerciseName(name){
   EXERCISE_ALIAS_REPLACEMENTS.forEach(([re,rep])=>{ s=s.replace(re,rep); });
   return s.replace(/\s+/g,' ').trim();
 }
+// Two exercise names are "the same exercise" for matching/merging purposes when they agree
+// on case, punctuation, spacing AND word order — so "Barbell Curl", "barbell curls" and
+// "Curls Barbell" all resolve to the same identity key. This is intentionally looser than
+// normalizeExerciseName (which stays word-order-sensitive for exact catalog lookups) and is
+// used for: recognizing an exercise already logged under a slightly different name, merging
+// duplicate exercise entries, and pooling stats/progress for the same exercise cumulatively.
+function exerciseIdentityKey(name){
+  const norm = normalizeExerciseName(name);
+  if(!norm) return '';
+  return norm.split(' ').filter(Boolean).sort().join(' ');
+}
 function normalizeStatsGroup(group){
   const normalized = String(group||'').trim().toLowerCase();
   return STATS_GROUPS.includes(normalized) ? normalized : null;
@@ -518,8 +529,10 @@ function normalizeStatsGroup(group){
 function exactExerciseNameKey(name){
   return String(name||'').toLowerCase().trim().replace(/\s+/g,' ');
 }
+let exerciseClassificationIdentityIndex = null;
 function buildExerciseClassificationIndex(){
   exerciseClassificationIndex = new Map();
+  exerciseClassificationIdentityIndex = new Map();
   const bundled = (window.PLATE_PROGRESS_EXERCISE_DATABASE && window.PLATE_PROGRESS_EXERCISE_DATABASE.exercises) || [];
   const local = (DB.exerciseDatabase && Array.isArray(DB.exerciseDatabase.exercises)) ? DB.exerciseDatabase.exercises : [];
   // Imported records supplement the bundled catalog; when names overlap, imported
@@ -534,11 +547,25 @@ function buildExerciseClassificationIndex(){
     const recordsForKey = exerciseClassificationIndex.get(key) || [];
     recordsForKey.push(r);
     exerciseClassificationIndex.set(key,recordsForKey);
+    // Word-order-insensitive fallback index (see exerciseIdentityKey) so a name typed
+    // with its words in a different order still resolves to the same catalog entry.
+    const idKey = exerciseIdentityKey(r.name);
+    if(idKey){
+      const idRecords = exerciseClassificationIdentityIndex.get(idKey) || [];
+      idRecords.push(r);
+      exerciseClassificationIdentityIndex.set(idKey,idRecords);
+    }
   });
 }
 function builtInExerciseRecord(name){
   if(!exerciseClassificationIndex) buildExerciseClassificationIndex();
-  const records = exerciseClassificationIndex.get(normalizeExerciseName(name)) || [];
+  let records = exerciseClassificationIndex.get(normalizeExerciseName(name)) || [];
+  if(!records.length){
+    // Fall back to a word-order/case/punctuation-insensitive match (e.g. "curls barbell"
+    // vs "barbell curls") so minor phrasing differences still resolve to the same
+    // catalog entry instead of silently landing as Unclassified.
+    records = exerciseClassificationIdentityIndex.get(exerciseIdentityKey(name)) || [];
+  }
   if(!records.length) return null;
   // A few catalog names collapse to one canonical key (for example, punctuation
   // variants). Preserve exact catalog-name recognition before applying the
@@ -615,6 +642,7 @@ async function loadAll(){
     DB_META = meta || { lastAutoAssignDate:null };
     buildExerciseClassificationIndex();
     ensureExerciseOrder();
+    if(mergeDuplicateExercisesWithinDays()) await Promise.all([idbSet('exercises',DB.exercises), idbSet('sets',DB.sets)]);
     if(ensureSplitDayHistory()) await idbSet('splits',DB.splits);
   }catch(err){ console.error('IndexedDB load failed',err); DB={splits:[],exercises:[],sets:[],exerciseClassificationOverrides:{},exerciseDatabase:null}; toast('Could not open local storage'); }
 }
@@ -631,6 +659,38 @@ function ensureExerciseOrder(){
       nextByDay[ex.dayId] = Math.max(nextByDay[ex.dayId] ?? -1, ex.order+1);
     }
   });
+}
+// One-time repair: earlier versions never checked whether a day already had a matching
+// exercise before creating a new one (and only matched exact, case-sensitive names in a
+// couple of places), so the same exercise could end up as two or more separate records in
+// one day — splitting its logged sets and stats across entries that never should have
+// existed ("Kenan flaps" showing different numbers than "Kenan flaps", etc.). This merges
+// any such duplicates (matched case/punctuation/word-order-insensitively) within the same
+// day into a single canonical record — the earliest-created one — and reassigns every set
+// from the duplicates onto it before discarding them. Safe to run on every load: once
+// there are no duplicates left, it's a no-op.
+function mergeDuplicateExercisesWithinDays(){
+  let changed = false;
+  const groups = new Map(); // `${dayId}|${identityKey}` -> exercise[]
+  DB.exercises.forEach(ex=>{
+    const key = ex.dayId + '|' + exerciseIdentityKey(ex.name);
+    const list = groups.get(key) || [];
+    list.push(ex);
+    groups.set(key, list);
+  });
+  const toRemove = new Set();
+  groups.forEach(list=>{
+    if(list.length<2) return;
+    const sorted = list.slice().sort((a,b)=> (a.createdAt||'').localeCompare(b.createdAt||'') || (a.order||0)-(b.order||0));
+    const canonical = sorted[0];
+    sorted.slice(1).forEach(dupe=>{
+      DB.sets.forEach(s=>{ if(s.exerciseId===dupe.id) s.exerciseId=canonical.id; });
+      toRemove.add(dupe.id);
+      changed = true;
+    });
+  });
+  if(changed) DB.exercises = DB.exercises.filter(e=>!toRemove.has(e.id));
+  return changed;
 }
 // Preserve every day ID that has ever belonged to a split. This lets permanent
 // split deletion clean up exercises from days that were later removed while editing.
@@ -725,7 +785,25 @@ function splitById(id){ return DB.splits.find(s=>s.id===id); }
 function daysOf(split){ return split ? split.days : []; }
 function exercisesOfDay(dayId){ return DB.exercises.filter(e=>e.dayId===dayId && !e.archived).sort((a,b)=>(a.order||0)-(b.order||0)); }
 function allExercisesOfDay(dayId){ return DB.exercises.filter(e=>e.dayId===dayId).sort((a,b)=>(a.order||0)-(b.order||0)); }
-function setsOfExercise(exId){ return DB.sets.filter(s=>s.exerciseId===exId).sort((a,b)=> a.date===b.date ? setSortValue(a)-setSortValue(b) : (a.date<b.date?-1:1) ); }
+// Every exercise record still "lives" under a single split day (that's what defines the
+// routine), but the SAME exercise can legitimately appear under more than one day (e.g.
+// "Bench press" on both Upper 1 and Upper 2), and earlier bugs could also create outright
+// duplicate records for one day. Either way, the user experiences all of those as one
+// exercise, so stats/progress must be pooled across every matching record — matching is
+// case/punctuation/word-order-insensitive (see exerciseIdentityKey) and scoped to the same
+// split so unrelated programs never get merged together.
+function matchingExerciseIds(ex){
+  if(!ex) return [];
+  const key = exerciseIdentityKey(ex.name);
+  if(!key) return [ex.id];
+  return DB.exercises.filter(e=> e.splitId===ex.splitId && exerciseIdentityKey(e.name)===key).map(e=>e.id);
+}
+function setsOfExercise(exId){
+  const ex = exerciseById(exId);
+  if(!ex) return [];
+  const ids = new Set(matchingExerciseIds(ex));
+  return DB.sets.filter(s=>ids.has(s.exerciseId)).sort((a,b)=> a.date===b.date ? setSortValue(a)-setSortValue(b) : (a.date<b.date?-1:1) );
+}
 function exerciseById(id){ return DB.exercises.find(e=>e.id===id); }
 function dayById(dayId){ for(const sp of DB.splits){ const d=(sp.days||[]).find(x=>x.id===dayId); if(d) return d; } return null; }
 async function saveMeta(){ try{ await idbSet('appMeta', DB_META); }catch(err){ console.error('meta save failed',err); } }
@@ -1176,13 +1254,24 @@ function openExerciseModal(splitId, dayId){
   document.getElementById('m-save').onclick = async ()=>{
     const name = inp.value.trim();
     if(!name){ toast('Name the exercise'); return; }
+    const dayExs = allExercisesOfDay(dayId);
+    // Don't create a second record for an exercise already in this day — matching ignores
+    // case, punctuation and word order, so "Barbell Curl" / "barbell curls" / "Curls
+    // Barbell" are all recognized as the same exercise. Earlier versions skipped this
+    // check entirely, which is what let duplicate entries (and duplicate stats) happen.
+    const dupKey = exerciseIdentityKey(name);
+    const dup = dupKey ? dayExs.find(e=>exerciseIdentityKey(e.name)===dupKey) : null;
+    if(dup){
+      closeModal();
+      toast(`"${dup.name}" is already in this day`);
+      return;
+    }
     const knownGroup = classifyExercise(name);
     // The exercise is always created here, immediately — never gated behind the
     // muscle-classification step. That step (below) is a best-effort follow-up:
     // if the user closes it without picking a group, the exercise is already
     // saved and simply stays "Unclassified" until they classify it later
     // (from the Split tab's classify affordance).
-    const dayExs = allExercisesOfDay(dayId);
     const nextOrder = dayExs.length ? Math.max(...dayExs.map(e=>e.order||0))+1 : 0;
     const newEx = { id:uid('ex'), splitId, dayId, name, archived:false, classified:!!knownGroup, order:nextOrder, createdAt:new Date().toISOString() };
     DB.exercises.push(newEx);
@@ -2347,22 +2436,27 @@ function statsForGroupThisWeek(group){
     const ex=exerciseById(s.exerciseId); if(!ex) return;
     if(classifyExercise(ex.name)!==group) return;
     if(!isCountedLoggedSet(s)) return;
-    exNames.add(normalizeExerciseName(ex.name)); days.add(s.date); sets++;
+    exNames.add(exerciseIdentityKey(ex.name)); days.add(s.date); sets++;
   });
   return {exercises:exNames.size, sets, frequency:days.size};
 }
 function statsForGroupActiveSplit(group, structuralFreq){
   const split=activeSplit();
   if(!split) return {exercises:0, sets:0, frequency:0};
-  const exNames=new Set(); let sets=0;
+  const seenKeys=new Set(); let sets=0;
   split.days.forEach(day=>{
     exercisesOfDay(day.id).forEach(ex=>{
       if(classifyExercise(ex.name)!==group) return;
-      exNames.add(normalizeExerciseName(ex.name));
+      const key=exerciseIdentityKey(ex.name);
+      // setsOfExercise now pools sets across every day this exercise appears under, so
+      // count each distinct exercise (and its sets) exactly once even if it's logged
+      // on more than one day of the split.
+      if(seenKeys.has(key)) return;
+      seenKeys.add(key);
       sets += setsOfExercise(ex.id).filter(isCountedLoggedSet).length;
     });
   });
-  return {exercises:exNames.size, sets, frequency:(structuralFreq && structuralFreq[group])||0};
+  return {exercises:seenKeys.size, sets, frequency:(structuralFreq && structuralFreq[group])||0};
 }
 function statsForGroup(group){
   return state.statsRange==='week' ? statsForGroupThisWeek(group) : statsForGroupActiveSplit(group, statsStructuralFreq);
@@ -2657,7 +2751,17 @@ function renderProgressExerciseMode(){
   setHeader('Progress', split.name, null, null);
 
   const allDayIds = split.days.map(d=>d.id);
-  const exList = DB.exercises.filter(e=> allDayIds.includes(e.dayId));
+  const exListRaw = DB.exercises.filter(e=> allDayIds.includes(e.dayId));
+  // Same exercise can appear under more than one day (or, from an earlier bug, as an
+  // outright duplicate record) — since setsOfExercise now pools their sets together,
+  // only show one entry per exercise identity so the dropdown isn't misleading.
+  const seenExKeys = new Set();
+  const exList = exListRaw.filter(e=>{
+    const key = exerciseIdentityKey(e.name);
+    if(seenExKeys.has(key)) return false;
+    seenExKeys.add(key);
+    return true;
+  });
 
   let html = buildProgressModeSwitcherHtml();
 
@@ -3333,7 +3437,7 @@ function renderProgressSplitMode(){
   </div>`;
 
   // shared vs split-specific exercises
-  const normNameOf = ex => normalizeExerciseName(ex.name);
+  const normNameOf = ex => exerciseIdentityKey(ex.name);
   const namesA = new Map(); mA.exs.forEach(e=>{ const k=normNameOf(e); if(!namesA.has(k)) namesA.set(k, []); namesA.get(k).push(e); });
   const namesB = new Map(); mB.exs.forEach(e=>{ const k=normNameOf(e); if(!namesB.has(k)) namesB.set(k, []); namesB.get(k).push(e); });
   const sharedKeys = [...namesA.keys()].filter(k=>namesB.has(k) && k);
