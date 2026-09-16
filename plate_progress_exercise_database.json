@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "source": "hasaneyldrm/exercises-dataset",
-  "source_record_count": 2212,
+  "source_record_count": 2264,
   "radar_groups": [
     "chest",
     "back",
@@ -51344,6 +51344,994 @@
         "yuhonas"
       ],
       "source_id": "Zottman_Preacher_Curl"
+    },
+    {
+      "id": "custom_jyoti_weighted_pullups",
+      "name": "weighted pullups",
+      "normalized_name": "weighted pullups",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:21:21.613Z"
+    },
+    {
+      "id": "custom_jyoti_barbell_rows",
+      "name": "barbell rows",
+      "normalized_name": "barbell rows",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:21:26.883Z"
+    },
+    {
+      "id": "custom_jyoti_oblique",
+      "name": "oblique",
+      "normalized_name": "oblique",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "core",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "core",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:21:37.675Z"
+    },
+    {
+      "id": "custom_jyoti_cable_crunches",
+      "name": "cable crunches",
+      "normalized_name": "cable crunches",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "core",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "core",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:21:42.587Z"
+    },
+    {
+      "id": "custom_jyoti_calf_raises_seated",
+      "name": "calf raises seated",
+      "normalized_name": "calf raises seated",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "legs",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "legs",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-11T10:49:26.433Z"
+    },
+    {
+      "id": "custom_jyoti_bulgarian_split_squats",
+      "name": "bulgarian split squats",
+      "normalized_name": "bulgarian split squats",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "legs",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "legs",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:21:55.005Z"
+    },
+    {
+      "id": "custom_jyoti_single_leg_extension",
+      "name": "single leg extension",
+      "normalized_name": "single leg extension",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "legs",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "legs",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:22:03.702Z"
+    },
+    {
+      "id": "custom_jyoti_pullovers",
+      "name": "pullovers",
+      "normalized_name": "pullovers",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:22:15.325Z"
+    },
+    {
+      "id": "custom_jyoti_flat_dumbbell_press",
+      "name": "flat dumbbell press",
+      "normalized_name": "flat dumbbell press",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "chest",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "chest",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:22:18.186Z"
+    },
+    {
+      "id": "custom_jyoti_pec_dec_fly",
+      "name": "pec dec fly",
+      "normalized_name": "pec dec fly",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "chest",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "chest",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:22:21.149Z"
+    },
+    {
+      "id": "custom_jyoti_single_arm_push_downs",
+      "name": "single arm push downs",
+      "normalized_name": "single arm push downs",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "arms",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "arms",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-14T15:42:18.293Z"
+    },
+    {
+      "id": "custom_jyoti_serratus_anterior",
+      "name": "serratus anterior",
+      "normalized_name": "serratus anterior",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "core",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "core",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:22:31.357Z"
+    },
+    {
+      "id": "custom_jyoti_recline_curls",
+      "name": "recline curls",
+      "normalized_name": "recline curls",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "arms",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "arms",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:22:40.245Z"
+    },
+    {
+      "id": "custom_jyoti_saggital_pull_down_single_hand",
+      "name": "saggital pull down single hand",
+      "normalized_name": "saggital pull down single hand",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:29:33.329Z"
+    },
+    {
+      "id": "custom_jyoti_machine_press",
+      "name": "machine press",
+      "normalized_name": "machine press",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "chest",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "chest",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:29:37.934Z"
+    },
+    {
+      "id": "custom_jyoti_romanian_deadlifts",
+      "name": "romanian deadlifts",
+      "normalized_name": "romanian deadlifts",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "legs",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "legs",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:29:55.829Z"
+    },
+    {
+      "id": "custom_jyoti_calf_raises",
+      "name": "calf raises",
+      "normalized_name": "calf raises",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "legs",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "legs",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:29:59.879Z"
+    },
+    {
+      "id": "custom_jyoti_obliques",
+      "name": "obliques",
+      "normalized_name": "obliques",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "core",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "core",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-11T10:42:29.011Z"
+    },
+    {
+      "id": "custom_jyoti_seated_overhead_press",
+      "name": "seated overhead press",
+      "normalized_name": "seated overhead press",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "shoulders",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "shoulders",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:30:16.734Z"
+    },
+    {
+      "id": "custom_jyoti_dumbbell_lateral_raises",
+      "name": "dumbbell lateral raises",
+      "normalized_name": "dumbbell lateral raises",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "shoulders",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "shoulders",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:30:18.910Z"
+    },
+    {
+      "id": "custom_jyoti_cable_lateral_raises",
+      "name": "cable lateral raises",
+      "normalized_name": "cable lateral raises",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "shoulders",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "shoulders",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:30:21.326Z"
+    },
+    {
+      "id": "custom_jyoti_rear_delt_cable_fly",
+      "name": "rear delt cable fly",
+      "normalized_name": "rear delt cable fly",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "shoulders",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "shoulders",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:30:24.733Z"
+    },
+    {
+      "id": "custom_jyoti_wide_grip_machine_row",
+      "name": "wide grip machine row",
+      "normalized_name": "wide grip machine row",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-11T10:45:40.599Z"
+    },
+    {
+      "id": "custom_jyoti_shrugs",
+      "name": "shrugs",
+      "normalized_name": "shrugs",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:30:33.815Z"
+    },
+    {
+      "id": "custom_jyoti_forearm_curls",
+      "name": "forearm curls",
+      "normalized_name": "forearm curls",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "arms",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "arms",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:30:49.739Z"
+    },
+    {
+      "id": "custom_jyoti_skull_crushers",
+      "name": "skull crushers",
+      "normalized_name": "skull crushers",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "arms",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "arms",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T14:31:01.797Z"
+    },
+    {
+      "id": "custom_jyoti_overhead_single_arm_push_downs",
+      "name": "overhead single arm push downs",
+      "normalized_name": "overhead single arm push downs",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "arms",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "arms",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-11T10:46:05.003Z"
+    },
+    {
+      "id": "custom_jyoti_rest",
+      "name": "rest",
+      "normalized_name": "rest",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "chest",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "chest",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-08-31T19:40:07.990Z"
+    },
+    {
+      "id": "custom_jyoti_kenan_flaps",
+      "name": "kenan flaps",
+      "normalized_name": "kenan flaps",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-08T15:17:51.575Z"
+    },
+    {
+      "id": "custom_jyoti_cable_shoulders_adduction",
+      "name": "cable shoulders adduction",
+      "normalized_name": "cable shoulders adduction",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "chest",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "chest",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-08T15:18:39.351Z"
+    },
+    {
+      "id": "custom_jyoti_cable_triceps_pushdown",
+      "name": "cable triceps pushdown",
+      "normalized_name": "cable triceps pushdown",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "arms",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "arms",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-08T15:19:57.286Z"
+    },
+    {
+      "id": "custom_jyoti_single_legs_extension",
+      "name": "single legs extension",
+      "normalized_name": "single legs extension",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "legs",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "legs",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-08T15:20:13.916Z"
+    },
+    {
+      "id": "custom_jyoti_kenan_flaps_saggital_plane",
+      "name": "kenan flaps saggital plane",
+      "normalized_name": "kenan flaps saggital plane",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-08T15:24:26.717Z"
+    },
+    {
+      "id": "custom_jyoti_cable_rows",
+      "name": "cable rows",
+      "normalized_name": "cable rows",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-08T15:24:49.239Z"
+    },
+    {
+      "id": "custom_jyoti_cable_shoulders_flexion",
+      "name": "cable shoulders flexion",
+      "normalized_name": "cable shoulders flexion",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "chest",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "chest",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-09T09:11:43.883Z"
+    },
+    {
+      "id": "custom_jyoti_cable_shoulder_flexion",
+      "name": "cable shoulder flexion",
+      "normalized_name": "cable shoulder flexion",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "chest",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "chest",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-09T09:13:44.322Z"
+    },
+    {
+      "id": "custom_jyoti_machine_wide_grip_row",
+      "name": "machine wide grip row",
+      "normalized_name": "machine wide grip row",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-09T09:14:25.255Z"
+    },
+    {
+      "id": "custom_jyoti_cable_overhead_push_downs",
+      "name": "cable overhead push downs",
+      "normalized_name": "cable overhead push downs",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "arms",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "arms",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-09T09:15:13.753Z"
+    },
+    {
+      "id": "custom_jyoti_recline_curl",
+      "name": "recline curl",
+      "normalized_name": "recline curl",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "arms",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "arms",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-09T09:15:22.749Z"
+    },
+    {
+      "id": "custom_jyoti_forearm_exercise",
+      "name": "forearm exercise",
+      "normalized_name": "forearm exercise",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "arms",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "arms",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-09T09:15:47.342Z"
+    },
+    {
+      "id": "custom_jyoti_keenan_flaps",
+      "name": "keenan flaps",
+      "normalized_name": "keenan flaps",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-09T15:46:53.330Z"
+    },
+    {
+      "id": "custom_jyoti_wide_grip_rows",
+      "name": "wide grip rows",
+      "normalized_name": "wide grip rows",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-11T10:41:44.854Z"
+    },
+    {
+      "id": "custom_jyoti_overhead_single_arm_extension",
+      "name": "overhead single arm extension",
+      "normalized_name": "overhead single arm extension",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "arms",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "arms",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-11T10:46:31.608Z"
+    },
+    {
+      "id": "custom_jyoti_overhead_single_arm_extensions",
+      "name": "overhead single arm extensions",
+      "normalized_name": "overhead single arm extensions",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "arms",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "arms",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-11T10:48:29.449Z"
+    },
+    {
+      "id": "custom_jyoti_cable_shoulder_adduction",
+      "name": "cable shoulder adduction",
+      "normalized_name": "cable shoulder adduction",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "chest",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "chest",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_jyoti_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "jyoti",
+      "classification_updated_at": "2026-09-14T16:26:11.951Z"
+    },
+    {
+      "id": "custom_krish_back_shots",
+      "name": "back shots",
+      "normalized_name": "back shots",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "legs",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "legs",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_krish_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "krish",
+      "classification_updated_at": "2026-09-13T16:44:17.204Z"
+    },
+    {
+      "id": "custom_krish_close_grip_pull_ups_weighted",
+      "name": "close grip pull ups weighted",
+      "normalized_name": "close grip pull ups weighted",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_krish_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "krish",
+      "classification_updated_at": "2026-09-14T15:25:49.920Z"
+    },
+    {
+      "id": "custom_krish_chest_supported_t_bar",
+      "name": "chest supported t bar",
+      "normalized_name": "chest supported t bar",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_krish_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "krish",
+      "classification_updated_at": "2026-09-14T15:50:46.055Z"
+    },
+    {
+      "id": "custom_krish_low_incline_chest_press_mh",
+      "name": "low incline chest press mh",
+      "normalized_name": "low incline chest press mh",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "chest",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "chest",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_krish_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "krish",
+      "classification_updated_at": "2026-09-14T16:01:05.853Z"
+    },
+    {
+      "id": "custom_krish_cable_shrugs_with_bar",
+      "name": "cable shrugs with bar",
+      "normalized_name": "cable shrugs with bar",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "back",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "back",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_krish_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "krish",
+      "classification_updated_at": "2026-09-14T16:19:22.256Z"
+    },
+    {
+      "id": "custom_krish_rear_delt_pec_dec",
+      "name": "rear delt pec dec",
+      "normalized_name": "rear delt pec dec",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "shoulders",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "shoulders",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_krish_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "krish",
+      "classification_updated_at": "2026-09-14T16:20:04.603Z"
+    },
+    {
+      "id": "custom_krish_lateral_raises",
+      "name": "lateral raises",
+      "normalized_name": "lateral raises",
+      "body_part": null,
+      "equipment": null,
+      "primary_muscle": null,
+      "radar_group": "shoulders",
+      "secondary_muscles": [],
+      "secondary_radar_groups": [],
+      "muscle_group": "shoulders",
+      "source_category": "custom",
+      "sources": [
+        "plate_progress_krish_manual_classification"
+      ],
+      "custom_classification": true,
+      "classification_source": "krish",
+      "classification_updated_at": "2026-09-14T16:22:32.156Z"
     }
   ],
   "metadata": {
@@ -51355,6 +52343,7 @@
     "yuhonas_source_records": 876,
     "yuhonas_duplicates_matched": 168,
     "yuhonas_new_records_added": 708,
-    "final_merged_record_count": 2212
+    "final_merged_record_count": 2264,
+    "custom_exercises_added": 52
   }
 }
