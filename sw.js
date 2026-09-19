@@ -1,4 +1,4 @@
-const CACHE_NAME = 'plate-progress-v19-warmup-final';
+const CACHE_NAME = 'plate-progress-v24-back-fix-pan-callout';
 const APP_SHELL = [
   './', './index.html', './manifest.json', './exercise-database.js', './stats3d.js', './body.glb',
   './icon-192.png', './icon-512.png'

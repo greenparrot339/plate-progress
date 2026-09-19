@@ -168,6 +168,11 @@ window.Stats3D = (function () {
   // anatomy (for example the head inside the chest mesh and feet inside the
   // arms mesh), so triangles are separated into the correct selectable region
   // at render time.
+  //
+  // The source GLB uses a few meshes as containers for multiple disconnected
+  // anatomical pieces. Selection is therefore classified per triangle rather
+  // than treating the whole source mesh as one muscle group.
+  //
   function classifyTriangle(sourceCategory, a, b, c) {
     var x = (a.x + b.x + c.x) / 3;
     var y = (a.y + b.y + c.y) / 3;
@@ -180,15 +185,25 @@ window.Stats3D = (function () {
     //
     // CHEST: its pectoral geometry ends around y=1.53. Geometry above that
     // height is the head/neck assembly and must remain visible but neutral.
-    if (sourceCategory === 'chest' && y > 1.535) return null;
+    if (sourceCategory === 'chest' && y > 1.53) return null;
 
-    // BACK: the source back mesh contains tiny disconnected ear pieces. They
-    // sit laterally beside the head, slightly behind the body center, around
-    // y=1.44 and z<0.  Exclude only that small anatomical pocket.
-    if (sourceCategory === 'back' &&
-        y > 1.405 && y < 1.475 &&
-        ax > 0.118 && ax < 0.155 &&
-        z < 0.005) return null;
+    // CHEST/CORE: the chest mesh's pec geometry also extends down into the same
+    // y-range the core mesh's own (separate) ab geometry occupies (roughly
+    // y=1.25-1.35 in both meshes), and the pec surface sits slightly more
+    // forward (protrudes more) than the ab surface directly behind/below it —
+    // so a tap aimed at the abs was hitting this overlapping chest geometry
+    // first. Excluding it here lets the raycast see through to the core mesh's
+    // own geometry, which already fully covers this band on its own.
+    if (sourceCategory === 'chest' && y < 1.35) return null;
+
+    // BACK: verified directly against the model's vertex data. The back
+    // mesh's own surface (including its shoulder-blade/lat width) is one
+    // continuous piece all the way up to y=1.69 — that's real back anatomy
+    // and must stay classified as back. Only the small horn/antenna pieces
+    // above the head (y>1.6, confirmed disconnected from the rest of the
+    // mesh and from nothing else in that height range) are decorative, not
+    // muscle, and should stay neutral.
+    if (sourceCategory === 'back' && y > 1.6) return null;
 
     // SHOULDERS: in this GLB the PXP_shoulders container includes both the
     // deltoid caps and the upper-arm/biceps/triceps geometry. Keep the actual
@@ -197,7 +212,7 @@ window.Stats3D = (function () {
     // screen coordinates, so it continues to work while the body rotates.
     // The shoulder caps occupy the upper ~1.41-1.53 range; the upper arms sit
     // below that and connect down toward the elbows.
-    if (sourceCategory === 'shoulders' && y < 1.41) return 'arms';
+    if (sourceCategory === 'shoulders' && y < 1.46) return 'arms';
 
     // ARMS: the source arms mesh also contains disconnected feet/lower-leg
     // geometry. Move everything below the knee/hand transition into LEGS.
@@ -341,6 +356,8 @@ window.Stats3D = (function () {
     this.minDistance = 2.0;
     this.maxDistance = 4.8;
     this.target = new THREE.Vector3(0, 0.90, 0);
+    this._naturalTarget = this.target.clone();
+    this._maxPanRadius = 0.85;
 
     this._initThree();
     this._bindEvents();
@@ -381,16 +398,20 @@ window.Stats3D = (function () {
     var camera = new THREE.PerspectiveCamera(32, w / h, 0.1, 20);
     this.camera = camera;
 
-    // Soft studio lighting designed to reproduce the light-gray sculpted
-    // reference model while keeping the app's existing dark background.
-    var hemi = new THREE.HemisphereLight(0xffffff, 0x34373b, 1.25);
+    // Studio lighting tuned for visible sculpted detail: enough directional key light
+    // to cast real shadow definition into the model's creases (nostrils, ear, chest/ab
+    // separation, joints), with the flat/fill lights kept low so they don't wash that
+    // back out. The previous, much brighter fill/hemi/ambient mix pushed nearly the
+    // whole surface toward the same near-white value at every angle, which read as
+    // "too light" rather than as a shaded, readable sculpt.
+    var hemi = new THREE.HemisphereLight(0xffffff, 0x2a2c2f, 0.40);
     hemi.position.set(0, 2.5, 0);
     scene.add(hemi);
 
-    var ambient = new THREE.AmbientLight(0xffffff, 0.32);
+    var ambient = new THREE.AmbientLight(0xffffff, 0.10);
     scene.add(ambient);
 
-    var key = new THREE.DirectionalLight(0xffffff, 1.35);
+    var key = new THREE.DirectionalLight(0xffffff, 1.15);
     key.position.set(2.5, 3.6, 4.0);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
@@ -398,11 +419,11 @@ window.Stats3D = (function () {
     key.shadow.camera.far = 8;
     scene.add(key);
 
-    var fill = new THREE.DirectionalLight(0xffffff, 0.78);
+    var fill = new THREE.DirectionalLight(0xffffff, 0.24);
     fill.position.set(-3.0, 2.3, 3.0);
     scene.add(fill);
 
-    var rim = new THREE.DirectionalLight(0xffffff, 0.50);
+    var rim = new THREE.DirectionalLight(0xffffff, 0.22);
     rim.position.set(-1.8, 2.8, -4.0);
     scene.add(rim);
 
@@ -425,11 +446,11 @@ window.Stats3D = (function () {
     };
     // Close to the reference GLB's neutral clay/plaster appearance: bright
     // enough to show the sculpted anatomy on a dark viewport, but not glossy.
-    this.matNormal = makeBodyMaterial(0xb9bbbd, 0.66, 0.0);
-    this.matNeutral = makeBodyMaterial(0xb1b3b5, 0.69, 0.0);
+    this.matNormal = makeBodyMaterial(0x8f9193, 0.74, 0.0);
+    this.matNeutral = makeBodyMaterial(0x87898c, 0.76, 0.0);
     this.matSelected = makeBodyMaterial(0xead27a, 0.52, 0.0, 0xdca51d, 0.18);
-    this.matDimmed = makeBodyMaterial(0x85888b, 0.72, 0.0);
-    this.matNeutralDimmed = makeBodyMaterial(0x7c7f82, 0.74, 0.0);
+    this.matDimmed = makeBodyMaterial(0x75787b, 0.76, 0.0);
+    this.matNeutralDimmed = makeBodyMaterial(0x6c6f72, 0.78, 0.0);
 
     this._updateCamera();
   };
@@ -474,6 +495,17 @@ window.Stats3D = (function () {
     var z = this.target.z + this.distance * sinPhi * Math.cos(this.theta);
     this.camera.position.set(x, y, z);
     this.camera.lookAt(this.target);
+    // Fog used to be a fixed world-space band (3.2–6.5 from the camera's origin), so
+    // pinch-zooming — which moves the camera itself, not just the FOV — carried the
+    // model in and out of that band: zoomed in, it fell outside the fog entirely and
+    // looked blown-out; zoomed out, it sat deep inside the band and looked overly dark.
+    // Keeping the same offsets *from the current distance* (0.15 / 3.45, matched to the
+    // original 3.2/6.5 look at the original default distance of 3.05) reproduces the
+    // intended falloff at every zoom level instead of only at the default one.
+    if (this.scene.fog) {
+      this.scene.fog.near = this.distance + 0.15;
+      this.scene.fog.far = this.distance + 3.45;
+    }
   };
 
   View.prototype._bindEvents = function () {
@@ -493,6 +525,7 @@ window.Stats3D = (function () {
       } else if (self._pointers.size === 2) {
         self._pinchStartDistance = self._currentPinchDistance();
         self._pinchStartCameraDistance = self.distance;
+        self._panStartMid = self._currentPinchMidpoint();
       }
       e.preventDefault && e.preventDefault();
     };
@@ -507,8 +540,29 @@ window.Stats3D = (function () {
           var ratio = self._pinchStartDistance / Math.max(1, d);
           var next = self._pinchStartCameraDistance * ratio;
           self.distance = Math.max(self.minDistance, Math.min(self.maxDistance, next));
-          self._updateCamera();
         }
+        var mid = self._currentPinchMidpoint();
+        if (self._panStartMid) {
+          var pdx = mid.x - self._panStartMid.x;
+          var pdy = mid.y - self._panStartMid.y;
+          if (pdx !== 0 || pdy !== 0) {
+            var rect = el.getBoundingClientRect();
+            var fovRad = self.camera.fov * Math.PI / 180;
+            var targetDistance = self.distance * Math.tan(fovRad / 2);
+            self._panLeft(2 * pdx * targetDistance / rect.height);
+            self._panUp(2 * pdy * targetDistance / rect.height);
+            // Keep the pan within a reasonable radius of the model's natural
+            // center so two fingers can't drag the view off into empty space
+            // with no way back short of a page reload.
+            var offset = self.target.clone().sub(self._naturalTarget);
+            if (offset.length() > self._maxPanRadius) {
+              offset.setLength(self._maxPanRadius);
+              self.target.copy(self._naturalTarget).add(offset);
+            }
+          }
+          self._panStartMid = mid;
+        }
+        self._updateCamera();
         return;
       }
 
@@ -529,7 +583,7 @@ window.Stats3D = (function () {
       if (wasSingle && self._dragStart && !self._dragMoved) {
         self._handleTap(e);
       }
-      if (self._pointers.size < 2) self._pinchStartDistance = 0;
+      if (self._pointers.size < 2) { self._pinchStartDistance = 0; self._panStartMid = null; }
       if (self._pointers.size === 0) self._dragStart = null;
     };
 
@@ -558,6 +612,26 @@ window.Stats3D = (function () {
     return Math.sqrt(dx * dx + dy * dy);
   };
 
+  View.prototype._currentPinchMidpoint = function () {
+    var pts = Array.from(this._pointers.values());
+    if (pts.length < 2) return null;
+    return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+  };
+
+  View.prototype._panLeft = function (distance) {
+    var v = new THREE.Vector3();
+    v.setFromMatrixColumn(this.camera.matrixWorld, 0);
+    v.multiplyScalar(-distance);
+    this.target.add(v);
+  };
+
+  View.prototype._panUp = function (distance) {
+    var v = new THREE.Vector3();
+    v.setFromMatrixColumn(this.camera.matrixWorld, 1);
+    v.multiplyScalar(distance);
+    this.target.add(v);
+  };
+
   View.prototype._handleTap = function (e) {
     if (!this.model) return;
     var rect = this.canvas.getBoundingClientRect();
@@ -565,16 +639,16 @@ window.Stats3D = (function () {
     this.ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     this.raycaster.setFromCamera(this.ndc, this.camera);
     var hits = this.raycaster.intersectObjects(this.model.root.children, true);
-    var category = null;
+    var category = null, hit = null;
     for (var i = 0; i < hits.length; i++) {
       var cat = hits[i].object && hits[i].object.userData ? hits[i].object.userData.category : null;
-      if (cat) { category = cat; break; }
+      if (cat) { category = cat; hit = hits[i]; break; }
     }
-    if (category) this.setSelected(category === this.selected ? this.selected : category);
+    if (category) this.setSelected(category === this.selected ? this.selected : category, hit);
     else this.setSelected(null);
   };
 
-  View.prototype.setSelected = function (category) {
+  View.prototype.setSelected = function (category, hit) {
     this.selected = category;
     if (this.model) {
       this.model.allMeshes.forEach(function (entry) {
@@ -586,6 +660,23 @@ window.Stats3D = (function () {
         if (cat === category) m.material = this.matSelected.clone();
         else m.material = (cat ? this.matDimmed : this.matNeutralDimmed).clone();
       }, this);
+      // The callout should originate from where the user actually tapped, not a fixed
+      // point in the middle of the muscle group — otherwise tapping the top of the
+      // shoulder or the bottom of the calf still draws the line from the region's
+      // geometric center, which reads as pointing at the wrong spot. Reposition this
+      // category's existing anchor object to the tap's hit point (nudged a little along
+      // the surface normal so the line doesn't appear to start from inside the mesh),
+      // converted into the model root's local space so it still tracks correctly if the
+      // model is rotated afterward. If setSelected is ever called without a hit (e.g.
+      // re-selecting programmatically), the anchor simply keeps its last position.
+      if (category && hit && hit.point && this.model.anchors[category]) {
+        var normal = new THREE.Vector3(0, 0, 1);
+        if (hit.face && hit.face.normal) {
+          normal.copy(hit.face.normal).transformDirection(hit.object.matrixWorld).normalize();
+        }
+        var worldPoint = hit.point.clone().addScaledVector(normal, 0.028);
+        this.model.anchors[category].position.copy(this.model.root.worldToLocal(worldPoint));
+      }
     }
     if (this.callbacks.onSelect) this.callbacks.onSelect(category);
   };

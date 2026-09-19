@@ -338,7 +338,7 @@
 
   .toast{position:fixed;bottom:calc(84px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);
     background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 16px;border-radius:20px;
-    font-size:13px;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+    font-size:13px;z-index:200;opacity:0;pointer-events:none;transition:opacity 0.2s;max-width:calc(100vw - 32px);text-align:center;}
   .toast.show{opacity:1;}
 
   /* ===== Previous Sessions (Log tab) ===== */
@@ -577,7 +577,18 @@ function builtInExerciseRecord(name){
 // remains exact catalog recognition plus persistent manual classification only.
 function resolveExerciseIntelligence(name){
   const key = normalizeExerciseName(name);
-  const override = DB.exerciseClassificationOverrides && DB.exerciseClassificationOverrides[key];
+  let override = DB.exerciseClassificationOverrides && DB.exerciseClassificationOverrides[key];
+  if(!override && DB.exerciseClassificationOverrides){
+    // Fall back to a word-order/case/punctuation-insensitive match, mirroring the
+    // built-in database lookup below, so an exercise you've already classified by hand
+    // doesn't silently fall back to Unclassified just because it was logged under a
+    // slightly reordered or differently-punctuated name later.
+    const idKey = exerciseIdentityKey(name);
+    if(idKey){
+      const matchKey = Object.keys(DB.exerciseClassificationOverrides).find(k=>exerciseIdentityKey(k)===idKey);
+      if(matchKey) override = DB.exerciseClassificationOverrides[matchKey];
+    }
+  }
   if(override && STATS_GROUPS.includes(override.group)){
     return { group:override.group, source:'manual', recordId:null,
       resolvedAt:override.updatedAt || null,
@@ -605,7 +616,7 @@ function classificationSource(name){
 function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function fmtDate(s){ const d=new Date(s+'T00:00:00'); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),1800); }
+function toast(msg, duration=1800){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),duration); }
 
 /* ============ LOCAL STORAGE (IndexedDB) ============ */
 const DB_NAME = 'plate-progress-db';
@@ -673,6 +684,7 @@ function mergeDuplicateExercisesWithinDays(){
   let changed = false;
   const groups = new Map(); // `${dayId}|${identityKey}` -> exercise[]
   DB.exercises.forEach(ex=>{
+    if(ex.archived) return; // archived exercises are frozen snapshots — never auto-merged
     const key = ex.dayId + '|' + exerciseIdentityKey(ex.name);
     const list = groups.get(key) || [];
     list.push(ex);
@@ -776,9 +788,9 @@ function registerPWA(){
 
 function isWarmupSet(s){ return String(s?.setType||'working').toLowerCase()==='warmup'; }
 function isWorkingSet(s){ return !isWarmupSet(s); }
-function isCountedLoggedSet(s){ return Number(s?.weight)>0; }
+function isCountedLoggedSet(s){ const w=Number(s?.weight), r=Number(s?.reps); return (Number.isFinite(w)&&w>0) || (Number.isFinite(r)&&r>0); }
 function isWorkingPerformanceSet(s){ return isWorkingSet(s) && Number(s?.weight)>0 && Number(s?.reps)>0; }
-function setSortValue(s){ const v=String(s?.setNumber??''); const m=v.match(/^w(\d+)$/i); return m ? -Number(m[1]) : (Number.isFinite(Number(v)) ? Number(v) : 999999); }
+function setSortValue(s){ const v=String(s?.setNumber??''); const m=v.match(/^w(\d+)$/i); return m ? Number(m[1])-100000 : (Number.isFinite(Number(v)) ? Number(v) : 999999); }
 /* ============ QUERIES ============ */
 function activeSplit(){ return DB.splits.find(s=>!s.archivedAt); }
 function splitById(id){ return DB.splits.find(s=>s.id===id); }
@@ -794,9 +806,13 @@ function allExercisesOfDay(dayId){ return DB.exercises.filter(e=>e.dayId===dayId
 // split so unrelated programs never get merged together.
 function matchingExerciseIds(ex){
   if(!ex) return [];
+  // Archived exercises are frozen the moment they're removed from a day — their history
+  // stays exactly as logged and never pools with (or absorbs sets from) any other
+  // exercise, active or archived, even one with an identical name.
+  if(ex.archived) return [ex.id];
   const key = exerciseIdentityKey(ex.name);
   if(!key) return [ex.id];
-  return DB.exercises.filter(e=> e.splitId===ex.splitId && exerciseIdentityKey(e.name)===key).map(e=>e.id);
+  return DB.exercises.filter(e=> !e.archived && e.splitId===ex.splitId && exerciseIdentityKey(e.name)===key).map(e=>e.id);
 }
 function setsOfExercise(exId){
   const ex = exerciseById(exId);
@@ -934,7 +950,7 @@ function render(){
 // moving right through the tab order slides content out to the left / in from the right,
 // and vice versa moving left.
 let tabSwitching = false;
-function goToTab(newTab){
+function goToTab(newTab, fromHistory){
   if(newTab===state.tab || tabSwitching) return;
   if(galleryMaximizeOpen) closeGalleryMaximize(); // never leave Split with the overlay still open
   const oldIdx = TAB_ORDER.indexOf(state.tab);
@@ -947,6 +963,11 @@ function goToTab(newTab){
   setTimeout(()=>{
     state.tab = newTab;
     render();
+    // Record this tab switch as its own history entry (unless we're the ones replaying
+    // one, from the back-button handler below) so the hardware/browser back button steps
+    // back through tabs first, and only reaches the "leave app?" prompt once the user is
+    // already on the tab they landed on when the app opened.
+    if(!fromHistory && appBackGuardReady) history.pushState({ppTab:newTab}, '', location.href);
     $main.classList.remove('main-exit-left','main-exit-right');
     $main.classList.add(forward ? 'main-enter-from-right' : 'main-enter-from-left');
     requestAnimationFrame(()=> requestAnimationFrame(()=>{
@@ -1224,17 +1245,36 @@ function openRenameExerciseModal(exerciseId){
   document.getElementById('m-cancel').onclick = close;
   document.getElementById('m-overlay').onclick = e=>{ if(e.target.id==='m-overlay') close(); };
   document.getElementById('m-save').onclick = async ()=>{
+    const saveBtn = document.getElementById('m-save');
+    if(saveBtn.disabled) return;
+    saveBtn.disabled = true;
+    try{
     const name = input.value.trim();
     if(!name){ toast('Name the exercise'); input.focus(); return; }
+    const dupKey = exerciseIdentityKey(name);
+    const dup = dupKey===exerciseIdentityKey(ex.name) ? null :
+      allExercisesOfDay(ex.dayId).find(e=>e.id!==ex.id && !e.archived && exerciseIdentityKey(e.name)===dupKey);
+    if(dup){
+      toast(`"${dup.name}" is already in this day`);
+      return;
+    }
     const changed = await renameExercise(ex, name);
     closeModal();
     render();
     toast(changed ? 'Exercise renamed' : 'No changes made');
+    }finally{
+      if(saveBtn.isConnected) saveBtn.disabled = false;
+    }
   };
   requestAnimationFrame(()=>{ input.focus(); input.select(); });
 }
 
 function openExerciseModal(splitId, dayId){
+  // Suggest exercise names already used elsewhere in this split, so picking an existing
+  // one (rather than retyping a slightly different spelling/order) is the easy default.
+  const suggestionNames = [...new Map(
+    DB.exercises.filter(e=>e.splitId===splitId && !e.archived).map(e=>[exerciseIdentityKey(e.name), e.name])
+  ).values()].sort((a,b)=>a.localeCompare(b));
   $modalRoot.innerHTML = `
     <div class="modal-overlay" id="m-overlay">
       <div class="modal-sheet">
@@ -1242,7 +1282,8 @@ function openExerciseModal(splitId, dayId){
         <h2>Add exercise</h2>
         <div class="field">
           <label class="field-label">Exercise name</label>
-          <input type="text" id="m-exname" placeholder="e.g. Barbell bench press">
+          <input type="text" id="m-exname" list="m-exname-suggestions" placeholder="e.g. Barbell bench press" autocomplete="off">
+          <datalist id="m-exname-suggestions">${suggestionNames.map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist>
         </div>
         <button class="btn btn-accent btn-block" id="m-save">Add exercise</button>
       </div>
@@ -1252,18 +1293,34 @@ function openExerciseModal(splitId, dayId){
   const inp = document.getElementById('m-exname');
   setTimeout(()=>inp.focus(),50);
   document.getElementById('m-save').onclick = async ()=>{
+    const saveBtn = document.getElementById('m-save');
+    if(saveBtn.disabled) return;
+    saveBtn.disabled = true;
+    try{
     const name = inp.value.trim();
     if(!name){ toast('Name the exercise'); return; }
     const dayExs = allExercisesOfDay(dayId);
-    // Don't create a second record for an exercise already in this day — matching ignores
-    // case, punctuation and word order, so "Barbell Curl" / "barbell curls" / "Curls
-    // Barbell" are all recognized as the same exercise. Earlier versions skipped this
-    // check entirely, which is what let duplicate entries (and duplicate stats) happen.
+    // Don't create a second record for an exercise already active in this day — matching
+    // ignores case, punctuation and word order, so "Barbell Curl" / "barbell curls" /
+    // "Curls Barbell" are all recognized as the same exercise. Earlier versions skipped
+    // this check entirely, which is what let duplicate entries (and duplicate stats) happen.
     const dupKey = exerciseIdentityKey(name);
-    const dup = dupKey ? dayExs.find(e=>exerciseIdentityKey(e.name)===dupKey) : null;
-    if(dup){
+    const activeDup = dupKey ? dayExs.find(e=>!e.archived && exerciseIdentityKey(e.name)===dupKey) : null;
+    if(activeDup){
       closeModal();
-      toast(`"${dup.name}" is already in this day`);
+      toast(`"${activeDup.name}" is already in this day`);
+      return;
+    }
+    // If this exercise was previously removed from this day (archived, not deleted,
+    // because it had history), bring the same record back instead of creating a new one
+    // — otherwise the user could never re-add an exercise they'd once removed.
+    const archivedDup = dupKey ? dayExs.find(e=>e.archived && exerciseIdentityKey(e.name)===dupKey) : null;
+    if(archivedDup){
+      archivedDup.archived = false;
+      await save('exercises');
+      closeModal();
+      render();
+      toast(`"${archivedDup.name}" restored`);
       return;
     }
     const knownGroup = classifyExercise(name);
@@ -1289,6 +1346,9 @@ function openExerciseModal(splitId, dayId){
         render();
         toast('Muscle group saved');
       });
+    }
+    }finally{
+      if(saveBtn.isConnected) saveBtn.disabled = false;
     }
   };
 }
@@ -2339,6 +2399,10 @@ function openSetModal(exerciseId, editSetId){
   };
 
   document.getElementById('m-save').onclick = async ()=>{
+    const saveBtn = document.getElementById('m-save');
+    if(saveBtn.disabled) return; // already saving — a second tap must not create duplicate sets
+    saveBtn.disabled = true;
+    try{
     // Sync the current inputs before validating/saving.
     listEl.querySelectorAll('.bulk-set-row').forEach((row,i)=>{
       rows[i].weight=row.querySelector('.m-row-weight').value===''?NaN:parseFloat(row.querySelector('.m-row-weight').value);
@@ -2399,10 +2463,18 @@ function openSetModal(exerciseId, editSetId){
     await save('sets');
     state.logDate = d;
     closeModal(); render(); toast(editSet ? (rows.length>1 ? `${rows.length} sets saved` : 'Set updated') : `${rows.length} ${rows.length===1?'set':'sets'} logged`);
+    }finally{
+      // If validation failed above and we returned early, the modal is still open —
+      // re-enable so the user can fix the input and try again. If saving succeeded,
+      // closeModal() already tore this button down, so this is a harmless no-op.
+      if(saveBtn.isConnected) saveBtn.disabled = false;
+    }
   };
 
   const delBtn = document.getElementById('m-delete');
   if(delBtn) delBtn.onclick = async ()=>{
+    if(delBtn.disabled) return;
+    delBtn.disabled = true;
     DB.sets = DB.sets.filter(s=>s.id!==editSet.id);
     await save('sets');
     closeModal(); render(); toast('Set removed');
@@ -2430,10 +2502,18 @@ function weekRangeFor(dateStr){
 }
 function statsForGroupThisWeek(group){
   const {start,end}=weekRangeFor(todayStr());
+  const split = activeSplit();
+  if(!split) return {exercises:0, sets:0, frequency:0};
   const exNames=new Set(); const days=new Set(); let sets=0;
   DB.sets.forEach(s=>{
     if(s.date<start || s.date>end) return;
     const ex=exerciseById(s.exerciseId); if(!ex) return;
+    // Scope to the active split, matching every other Stats/Progress metric — otherwise
+    // a set logged under a different (e.g. previous) split, but dated within this
+    // calendar week, would silently inflate the total. An exercise archived out of the
+    // active split still counts here: it really was trained this week, archiving just
+    // hides it from the day's current exercise list going forward.
+    if(ex.splitId!==split.id) return;
     if(classifyExercise(ex.name)!==group) return;
     if(!isCountedLoggedSet(s)) return;
     exNames.add(exerciseIdentityKey(ex.name)); days.add(s.date); sets++;
@@ -2680,6 +2760,17 @@ function positionStatsFloatCard(pos){
   const card=document.getElementById('stats3d-float');
   const leader=document.getElementById('stats3d-leader');
   if(!wrap || !card || !leader) return;
+  // While the selected point has rotated around to the far side of the model, its
+  // on-screen projection is no longer meaningful (a point behind the object can
+  // project to an arbitrary/misleading screen position), which is what let the
+  // card jump to and stick on the wrong side while rotating. Just hide it until
+  // the point faces the camera again, rather than positioning off a bad value.
+  if(pos.visible===false){
+    card.classList.remove('show');
+    leader.innerHTML='';
+    return;
+  }
+  card.classList.add('show');
   leader.setAttribute('viewBox', `0 0 ${pos.w} ${pos.h}`);
   const cw = Math.min(180, Math.max(132, card.offsetWidth || 150));
   const ch = card.offsetHeight || 96;
@@ -2752,11 +2843,14 @@ function renderProgressExerciseMode(){
 
   const allDayIds = split.days.map(d=>d.id);
   const exListRaw = DB.exercises.filter(e=> allDayIds.includes(e.dayId));
-  // Same exercise can appear under more than one day (or, from an earlier bug, as an
-  // outright duplicate record) — since setsOfExercise now pools their sets together,
-  // only show one entry per exercise identity so the dropdown isn't misleading.
+  // Active exercises with the same identity pool their sets together (see
+  // matchingExerciseIds), so they should only show once here. Archived exercises are
+  // frozen snapshots that never merge with anything — including each other — so every
+  // archived exercise keeps its own entry instead of being hidden behind, or hiding, a
+  // same-named active one.
   const seenExKeys = new Set();
   const exList = exListRaw.filter(e=>{
+    if(e.archived) return true;
     const key = exerciseIdentityKey(e.name);
     if(seenExKeys.has(key)) return false;
     seenExKeys.add(key);
@@ -3513,16 +3607,39 @@ function bindProgressSelectors(){
 function destroyCharts(){ Object.values(charts).forEach(c=>{ if(c) c.destroy(); }); charts={}; }
 
 let appBackGuardReady=false;
+let lastLeaveWarningAt=0;
+const LEAVE_CONFIRM_WINDOW_MS=2000;
 function installBackGuard(){
-  history.pushState({plateProgressGuard:true},'',location.href);
-  window.addEventListener('popstate',()=>{
+  // One entry per tab, so back can step through in-app tab history before ever reaching
+  // this guard; see goToTab. This first entry represents the tab the app opened on.
+  history.pushState({ppTab:state.tab}, '', location.href);
+  appBackGuardReady = true;
+  window.addEventListener('popstate', e=>{
     if(document.querySelector('.modal-overlay') || document.getElementById('gallery-max-overlay')){
-      closeModal(); closeGalleryMaximize(); history.pushState({plateProgressGuard:true},'',location.href); return;
+      closeModal(); closeGalleryMaximize();
+      history.pushState({ppTab:state.tab}, '', location.href);
+      return;
     }
-    history.pushState({plateProgressGuard:true},'',location.href);
-    const leave=document.createElement('div'); leave.className='modal-overlay'; leave.innerHTML=`<div class="modal-sheet"><h2>Leave Plate &amp; Progress?</h2><p style="color:var(--text-dim);font-size:13px;line-height:1.5;">Your workout data is saved locally. Do you want to leave the app?</p><div class="field-grid"><button class="btn" id="stay-app">No</button><button class="btn btn-accent" id="leave-app">Yes</button></div></div>`; document.body.appendChild(leave);
-    leave.querySelector('#stay-app').onclick=()=>leave.remove();
-    leave.querySelector('#leave-app').onclick=()=>{ leave.remove(); history.go(-1); };
+    const s = e.state;
+    if(s && s.ppTab){
+      // Landed on one of our own tab-history entries — just show that tab, no prompt.
+      if(s.ppTab!==state.tab) goToTab(s.ppTab, true);
+      return;
+    }
+    // No tab entry left to unwind: the user is backing out of the app itself. Rather than
+    // a confirm dialog (which is just another overlay the check above would have to tell
+    // apart from every other modal, and which a spammed back button could desync), use
+    // the standard "press back again to exit" pattern: the first press just re-arms the
+    // guard and shows a toast; a second press within the window is let through for real.
+    const now = Date.now();
+    if(now - lastLeaveWarningAt < LEAVE_CONFIRM_WINDOW_MS){
+      // Confirmed: don't re-push, let this back navigation actually leave (closing the
+      // app if there's nowhere left to go, same as if the guard had never been installed).
+      return;
+    }
+    lastLeaveWarningAt = now;
+    history.pushState({ppTab:state.tab}, '', location.href);
+    toast('Press back again to exit — your data is saved', LEAVE_CONFIRM_WINDOW_MS);
   });
 }
 /* ============ INIT ============ */
