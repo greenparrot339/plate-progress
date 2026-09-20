@@ -205,14 +205,20 @@ window.Stats3D = (function () {
     // muscle, and should stay neutral.
     if (sourceCategory === 'back' && y > 1.6) return null;
 
+    // CORE/LEGS: the core mesh's lower obliques/lower-ab geometry extends down
+    // into the same y-range the legs mesh's hip/glute geometry occupies
+    // (roughly y=1.01-1.13 in both meshes) — most visible from the side, where
+    // the oblique surface was winning the raycast over the hip beneath it.
+    // Verified the legs mesh fully covers this band on its own, so excluding
+    // it from core here doesn't leave a gap.
+    if (sourceCategory === 'core' && y < 1.11) return null;
+
     // SHOULDERS: in this GLB the PXP_shoulders container includes both the
     // deltoid caps and the upper-arm/biceps/triceps geometry. Keep the actual
     // shoulder caps as SHOULDERS, but move the lower portion of that container
     // into ARMS. This is based on the model's anatomical Y ranges, not on
     // screen coordinates, so it continues to work while the body rotates.
-    // The shoulder caps occupy the upper ~1.41-1.53 range; the upper arms sit
-    // below that and connect down toward the elbows.
-    if (sourceCategory === 'shoulders' && y < 1.46) return 'arms';
+    if (sourceCategory === 'shoulders' && y < 1.48) return 'arms';
 
     // ARMS: the source arms mesh also contains disconnected feet/lower-leg
     // geometry. Move everything below the knee/hand transition into LEGS.
@@ -372,7 +378,7 @@ window.Stats3D = (function () {
 
     var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setSize(w, h);
+    renderer.setSize(w, h, false);
     if ('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
     else if ('outputEncoding' in renderer) renderer.outputEncoding = THREE.sRGBEncoding;
     // Keep the neutral gray of the source/reference model. ACES filmic tone
@@ -515,6 +521,8 @@ window.Stats3D = (function () {
     function pos(e) { return { x: e.clientX, y: e.clientY }; }
 
     this._onPointerDown = function (e) {
+      if (self._autoRotate) self._autoRotate = false;
+      clearTimeout(self._autoRotateResumeTimer);
       el.setPointerCapture && el.setPointerCapture(e.pointerId);
       self._pointers.set(e.pointerId, pos(e));
       if (self._pointers.size === 1) {
@@ -584,7 +592,18 @@ window.Stats3D = (function () {
         self._handleTap(e);
       }
       if (self._pointers.size < 2) { self._pinchStartDistance = 0; self._panStartMid = null; }
-      if (self._pointers.size === 0) self._dragStart = null;
+      if (self._pointers.size === 0) {
+        self._dragStart = null;
+        if (self._autoRotateWanted) {
+          clearTimeout(self._autoRotateResumeTimer);
+          self._autoRotateResumeTimer = setTimeout(function () {
+            if (self.disposed || self._pointers.size !== 0 || !self._autoRotateWanted) return;
+            self._rotateDir = Math.random() < 0.5 ? 1 : -1;
+            self._autoRotate = true;
+            if (self.callbacks.onAutoRotateChange) self.callbacks.onAutoRotateChange(true);
+          }, 2000);
+        }
+      }
     };
 
     el.addEventListener('pointerdown', this._onPointerDown);
@@ -683,7 +702,13 @@ window.Stats3D = (function () {
 
   View.prototype._tick = function () {
     if (this.disposed) return;
+    this._autoResizeCheck();
+    if (this._autoRotate && this._pointers.size === 0) {
+      this.theta += 0.0055 * (this._rotateDir || 1);
+      this._updateCamera();
+    }
     this.renderer.render(this.scene, this.camera);
+    if (this.callbacks.onRotationUpdate) this.callbacks.onRotationUpdate(this.theta);
     if (this.selected && this.model && this.model.anchors[this.selected]) {
       var anchor = this.model.anchors[this.selected];
       var worldPos = new THREE.Vector3();
@@ -700,12 +725,42 @@ window.Stats3D = (function () {
     this._raf = requestAnimationFrame(this._tick);
   };
 
+  View.prototype.setAutoRotate = function (enabled) {
+    this._autoRotateWanted = !!enabled;
+    clearTimeout(this._autoRotateResumeTimer);
+    if (enabled) {
+      this._rotateDir = Math.random() < 0.5 ? 1 : -1;
+      this._autoRotate = true;
+    } else {
+      this._autoRotate = false;
+    }
+    if (this.callbacks.onAutoRotateChange) this.callbacks.onAutoRotateChange(this._autoRotate);
+  };
+
+  View.prototype._autoResizeCheck = function () {
+    var w = this.container.clientWidth || 0;
+    var h = this.container.clientHeight || 0;
+    if (w < 1 || h < 1) return;
+    if (w === this._lastW && h === this._lastH) return;
+    this._lastW = w; this._lastH = h;
+    // false = don't let three.js touch canvas.style.width/height — the canvas's
+    // own CSS (width:100%; height:100%, set once in _initThree) stays in sole
+    // control of the displayed size and simply tracks its flex/layout container
+    // continuously, including smoothly through the graph panel's CSS transition.
+    // This call only updates the drawing-buffer resolution and devicePixelRatio
+    // scaling to match.
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+  };
+
   View.prototype.resize = function () {
     if (this.disposed) return;
     var w = this.container.clientWidth || 320;
     var h = this.container.clientHeight || 400;
     if (w < 1 || h < 1) return;
-    this.renderer.setSize(w, h);
+    this._lastW = w; this._lastH = h;
+    this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   };
@@ -714,6 +769,7 @@ window.Stats3D = (function () {
     if (this.disposed) return;
     this.disposed = true;
     cancelAnimationFrame(this._raf);
+    clearTimeout(this._autoRotateResumeTimer);
     window.removeEventListener('resize', this._onResize);
     var el = this.canvas;
     el.removeEventListener('pointerdown', this._onPointerDown);

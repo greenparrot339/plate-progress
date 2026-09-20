@@ -72,25 +72,13 @@
 
   /* stats */
   .stats-card{padding:15px 15px 14px;}
-  .stats-chart-wrap{position:relative;width:100%;max-width:440px;margin:2px auto 8px;aspect-ratio:1/1;min-height:290px;}
-  .stats-chart{display:block;width:100%;height:100%;overflow:visible;touch-action:pan-y;}
-  .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
-  .stats-metric{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 11px;min-width:0;}
-  .stats-metric .label{font-family:var(--font-display);font-size:11px;letter-spacing:.08em;color:var(--text-dim);text-transform:uppercase;}
-  .stats-metric .value{font-family:var(--font-mono);font-size:20px;font-weight:600;margin-top:3px;}
   .stats-tooltip{position:absolute;z-index:5;pointer-events:none;min-width:128px;max-width:190px;padding:9px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.28);transform:translate(-50%,-112%);opacity:0;transition:opacity .12s ease;}
   .stats-tooltip.show{opacity:1;}
   .stats-tooltip .tt-title{font-family:var(--font-display);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);}
   .stats-tooltip .tt-value{font-family:var(--font-mono);font-size:15px;font-weight:600;margin-top:2px;}
-  .stats-axis{font-family:var(--font-display);font-size:11px;letter-spacing:.06em;fill:var(--text-dim);text-transform:uppercase;}
   .stats-hit{fill:transparent;cursor:pointer;}
-  .stats-legend{font-size:11.5px;color:var(--text-faint);line-height:1.45;text-align:center;margin:3px 0 0;}
   .classification-btn{border:0;background:none;color:var(--text-faint);padding:2px 0;font:inherit;font-family:var(--font-mono);font-size:10.5px;cursor:pointer;text-align:left;}
   .classification-btn:hover{color:var(--accent);}
-  @media (max-width:380px){
-    .stats-chart-wrap{min-height:260px;}
-    .stats-grid{gap:6px;}
-  }
 
   /* stats 3d */
   .stats3d-wrap{position:relative;width:100%;aspect-ratio:3/4;max-height:440px;min-height:300px;border-radius:calc(var(--radius) + 2px);overflow:hidden;background:#0a0b0d;margin:2px 0 4px;touch-action:none;}
@@ -108,11 +96,94 @@
   .stats3d-fallback{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:22px;color:var(--text-faint);}
   .stats3d-fallback svg{width:28px;height:28px;stroke:var(--text-faint);fill:none;stroke-width:1.4;margin-bottom:10px;}
   .stats3d-fallback p{font-size:12.5px;line-height:1.5;margin:0;}
-  .stats3d-showmore{width:100%;background:none;border:none;color:var(--text-dim);display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 0 2px;font-family:var(--font-display);font-size:12px;letter-spacing:.08em;text-transform:uppercase;}
-  .stats3d-showmore .chev{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.2;transition:transform .2s ease;}
-  .stats3d-showmore.open .chev{transform:rotate(180deg);}
-  .stats3d-collapse{overflow:hidden;max-height:0;transition:max-height .28s ease;}
-  .stats3d-collapse.open{max-height:900px;}
+
+  /* --- stats 3d: fullscreen + futuristic graph overlay --- */
+  .stats3d-scanlines{position:absolute;inset:0;pointer-events:none;opacity:.05;mix-blend-mode:screen;
+    background:repeating-linear-gradient(0deg,#fff 0px,#fff 1px,transparent 1px,transparent 3px);}
+  .stats3d-corner{position:absolute;width:18px;height:18px;pointer-events:none;opacity:.55;}
+  .stats3d-corner::before,.stats3d-corner::after{content:'';position:absolute;background:var(--accent);}
+  .stats3d-corner::before{width:100%;height:1.5px;}
+  .stats3d-corner::after{width:1.5px;height:100%;}
+  .stats3d-corner.tl{top:9px;left:9px;} .stats3d-corner.tr{top:9px;right:9px;transform:scaleX(-1);}
+  .stats3d-corner.bl{bottom:9px;left:9px;transform:scaleY(-1);} .stats3d-corner.br{bottom:9px;right:9px;transform:scale(-1);}
+  .stats3d-fs-btn{position:absolute;top:9px;right:9px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+    background:rgba(10,11,13,.6);border:1px solid rgba(232,179,44,.35);border-radius:9px;color:var(--accent);z-index:6;
+    backdrop-filter:blur(4px);transition:background .15s,border-color .15s;}
+  .stats3d-fs-btn:active{background:rgba(232,179,44,.18);border-color:var(--accent);}
+  .stats3d-fs-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+
+  body.stats3d-fs-active{overflow:hidden;}
+  .stats3d-fs-overlay{position:fixed;inset:0;z-index:400;background:
+      radial-gradient(ellipse at 50% 30%, #1a1d22 0%, #08090a 72%);
+    display:none;flex-direction:column;touch-action:none;}
+  .stats3d-fs-overlay.open{display:flex;}
+  .stats3d-fs-overlay .stats3d-bg-grid{position:absolute;inset:0;pointer-events:none;opacity:.35;
+    background-image:linear-gradient(rgba(232,179,44,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(232,179,44,.07) 1px,transparent 1px);
+    background-size:34px 34px;mask-image:radial-gradient(ellipse at 50% 40%,#000 0%,transparent 72%);}
+  .stats3d-fs-topbar{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:calc(14px + env(safe-area-inset-top)) 14px 10px;}
+  .stats3d-fs-title{font-family:var(--font-display);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--text-dim);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1;text-align:center;}
+  .stats3d-fs-title b{color:var(--accent);}
+  .stats3d-fs-iconbtn{width:36px;height:36px;flex:none;display:flex;align-items:center;justify-content:center;
+    background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;color:var(--text);}
+  .stats3d-fs-iconbtn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .stats3d-fs-graphbtn{display:flex;align-items:center;gap:7px;height:36px;padding:0 15px 0 13px;flex:none;
+    background:linear-gradient(180deg,rgba(232,179,44,.16),rgba(232,179,44,.06));border:1px solid rgba(232,179,44,.4);
+    border-radius:18px;color:var(--accent);font-family:var(--font-display);font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;}
+  .stats3d-fs-graphbtn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .stats3d-fs-graphbtn.active{background:var(--accent);color:#1a1305;box-shadow:0 0 18px rgba(232,179,44,.45);}
+  .stats3d-fs-stage{position:relative;flex:1;min-height:0;}
+  .stats3d-fs-stage .stats3d-wrap{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto;max-height:none;
+    border-radius:0;margin:0;background:transparent;}
+  .stats3d-fs-stage .stats3d-wrap .stats3d-fs-btn{display:none;}
+
+  .stats3d-graph-panel{position:absolute;top:0;right:0;bottom:0;width:100%;max-width:480px;z-index:5;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 20px;
+    background:linear-gradient(90deg,rgba(8,9,10,0) 0%,rgba(10,11,13,.72) 30%,rgba(10,11,13,.92) 100%);
+    opacity:0;pointer-events:none;transform:translateX(14px);transition:opacity .4s ease,transform .4s cubic-bezier(.22,.75,.25,1);}
+  .stats3d-graph-panel.open{opacity:1;pointer-events:auto;transform:translateX(0);}
+  .stats3d-graph-inner{position:relative;width:100%;max-width:380px;}
+  .stats3d-graph-head{display:flex;flex-direction:column;align-items:center;gap:1px;margin-bottom:2px;text-align:center;}
+  .stats3d-graph-head h3{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;}
+  .stats3d-graph-head span{font-family:var(--font-mono);font-size:9.5px;color:var(--text-faint);letter-spacing:.05em;}
+  .stats3d-graph-swipe{margin-top:6px;font-family:var(--font-mono);font-size:9px;letter-spacing:.06em;color:var(--text-faint);
+    text-transform:uppercase;text-align:center;opacity:.7;}
+  .fg-chart-wrap{position:relative;width:100%;max-width:300px;margin:4px auto 0;aspect-ratio:1/1;max-height:50vh;}
+  .fg-chart{display:block;width:100%;height:100%;overflow:visible;}
+  .fg-chart-inner{transition:opacity .25s ease;}
+  .fg-chart-inner.hidden{opacity:0;pointer-events:none;}
+  .fg-ring{fill:none;stroke:rgba(232,179,44,.16);stroke-width:1;}
+  .fg-ring.outer{stroke:rgba(232,179,44,.3);stroke-dasharray:2 4;}
+  .fg-axis{stroke:rgba(232,179,44,.14);stroke-width:1;}
+  .fg-sweep{transform-origin:150px 150px;}
+  .fg-data{fill:var(--accent);fill-opacity:.14;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;
+    filter:drop-shadow(0 0 6px rgba(232,179,44,.55));}
+  .fg-dot{fill:#0e0f11;stroke:var(--accent);stroke-width:2;animation:stats3dPulse 2.2s ease-in-out infinite;}
+  .fg-label{font-family:var(--font-mono);font-size:9px;letter-spacing:.04em;fill:var(--text-dim);text-transform:uppercase;}
+  .fg-label .b{fill:var(--accent);font-weight:600;}
+  .fg-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px;}
+  .fg-metric{background:rgba(255,255,255,.03);border:1px solid rgba(232,179,44,.16);border-radius:9px;padding:6px 4px;text-align:center;}
+  .fg-metric .fm-label{font-family:var(--font-mono);font-size:8px;letter-spacing:.05em;color:var(--text-faint);text-transform:uppercase;}
+  .fg-metric .fm-value{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--accent);margin-top:2px;}
+
+  /* particle build/destroy effect */
+  .fg-particle{fill:var(--accent);filter:drop-shadow(0 0 2px rgba(232,179,44,.8));}
+  .fg-particle-build{opacity:0;animation:fgParticleBuild .95s cubic-bezier(.16,.85,.24,1) forwards;}
+  .fg-particle-destroy{animation:fgParticleDestroy .7s cubic-bezier(.5,0,.85,1) forwards;}
+  @keyframes fgParticleBuild{
+    0%{opacity:0;transform:translate(0,0) scale(.3);}
+    18%{opacity:1;}
+    100%{opacity:.85;transform:translate(var(--tx),var(--ty)) scale(1);}
+  }
+  @keyframes fgParticleDestroy{
+    0%{opacity:.85;transform:translate(0,0) scale(1);}
+    100%{opacity:0;transform:translate(var(--tx),var(--ty)) scale(.25);}
+  }
+
+  @keyframes stats3dSpin{to{transform:rotate(360deg);}}
+  @keyframes stats3dPulse{0%,100%{opacity:1;} 50%{opacity:.35;}}
+  @media (max-width:420px){ .fg-label{font-size:8px;} .stats3d-graph-head h3{font-size:11px;} }
 
   /* cards */
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 15px;margin-bottom:12px;}
@@ -486,7 +557,7 @@
 <script>
 /* ============ STATE ============ */
 let DB = { splits: [], exercises: [], sets: [], exerciseClassificationOverrides: {}, exerciseDatabase: null };
-let state = { tab:'log', logDayId:null, logExerciseId:null, logDate:null, logHistoryDate:null, logHistoryOpen:false, splitEditId:null, splitViewId:null, splitViewMode:'list', splitGalleryDayIndex:0, progressSplitId:null, progressExerciseId:null, progressMetric:'weight', progressMode:'exercise', progressDaySessionDate:null, progressSplitAId:null, progressSplitBId:null, progressSplitSharedKey:null, statsRange:'week', statsSelectedGroup:null, statsExpanded:false, logRenameMode:false };
+let state = { tab:'log', logDayId:null, logExerciseId:null, logDate:null, logHistoryDate:null, logHistoryOpen:false, splitEditId:null, splitViewId:null, splitViewMode:'list', splitGalleryDayIndex:0, progressSplitId:null, progressExerciseId:null, progressMetric:'weight', progressMode:'exercise', progressDaySessionDate:null, progressSplitAId:null, progressSplitBId:null, progressSplitSharedKey:null, statsRange:'week', statsSelectedGroup:null, stats3dFullscreen:false, stats3dGraphMode:'week', logRenameMode:false };
 let DB_META = { lastAutoAssignDate:null };
 let charts = {};
 const $main = document.getElementById('main');
@@ -2550,6 +2621,7 @@ function destroyStats3D(){
 }
 
 function renderStats(){
+  if(state.stats3dFullscreen) exitStats3DFullscreen();
   destroyStats3D();
   const split = activeSplit();
   if(!split){
@@ -2578,38 +2650,6 @@ function renderStats(){
 
   setHeader('Training analysis', split.name, null, null);
 
-  const labels = STATS_GROUPS.map(g=>STATS_LABELS[g]);
-  const values = STATS_GROUPS.map(g=>freq[g]);
-  const cx=150, cy=150, maxR=104, rings=4, total=STATS_GROUPS.length;
-  const maxValue=Math.max(1,...values);
-  const gridPolys=[];
-  for(let ring=1;ring<=rings;ring++){
-    const rr=maxR*ring/rings;
-    const pts=STATS_GROUPS.map((_,i)=>{const p=statsPoint(cx,cy,rr,i,total);return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;}).join(' ');
-    gridPolys.push(`<polygon points="${pts}" fill="none" stroke="var(--border)" stroke-width="1"/>`);
-  }
-  const axisLines=STATS_GROUPS.map((_,i)=>{
-    const p=statsPoint(cx,cy,maxR,i,total);
-    return `<line x1="${cx}" y1="${cy}" x2="${p.x.toFixed(1)}" y2="${p.y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>`;
-  }).join('');
-  const dataPts=STATS_GROUPS.map((g,i)=>{
-    const p=statsPoint(cx,cy,maxR*(freq[g]/maxValue),i,total);
-    return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
-  }).join(' ');
-  const axisLabels=STATS_GROUPS.map((g,i)=>{
-    const p=statsPoint(cx,cy,maxR+27,i,total);
-    let anchor='middle';
-    if(p.x<cx-8) anchor='end'; else if(p.x>cx+8) anchor='start';
-    let dy='0.35em';
-    if(p.y<cy-70) dy='0';
-    else if(p.y>cy+70) dy='1em';
-    return `<text class="stats-axis" x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" text-anchor="${anchor}" dy="${dy}">${labels[i]}</text>`;
-  }).join('');
-  const hitAreas=STATS_GROUPS.map((g,i)=>{
-    const p=statsPoint(cx,cy,maxR+10,i,total);
-    return `<circle class="stats-hit" data-stats-group="${g}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="25" aria-label="${labels[i]} ${freq[g]} times per week"/>`;
-  }).join('');
-
   $main.innerHTML = `
     <div class="card stats3d-card">
       <div class="segmented" id="stats-range">
@@ -2617,46 +2657,145 @@ function renderStats(){
         <button data-range="split" class="${state.statsRange==='split'?'active':''}">Active split</button>
       </div>
       <div class="stats3d-wrap" id="stats3d-wrap" aria-label="Interactive 3D body. Drag to rotate, pinch or scroll to zoom, tap a muscle group for stats.">
+        <div class="stats3d-scanlines"></div>
         <svg class="stats3d-leader" id="stats3d-leader"></svg>
         <div class="stats3d-hint" id="stats3d-hint">Tap a muscle to view stats</div>
         <div class="stats3d-float" id="stats3d-float"></div>
-      </div>
-    </div>
-    <div class="card">
-      <button class="stats3d-showmore${state.statsExpanded?' open':''}" id="stats3d-showmore">
-        <span>${state.statsExpanded?'Show less':'Show more'}</span>
-        <svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <div class="stats3d-collapse${state.statsExpanded?' open':''}" id="stats3d-collapse">
-        <div class="stats-card" style="padding-top:12px;">
-          <div class="stats-chart-wrap" id="stats-chart-wrap">
-            <svg class="stats-chart" id="stats-radar" viewBox="0 0 300 300" role="img" aria-label="Weekly training frequency radar chart">
-              <g>${gridPolys.join('')}</g>
-              <g>${axisLines}</g>
-              <polygon points="${dataPts}" fill="var(--accent)" fill-opacity=".16" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round"/>
-              ${STATS_GROUPS.map((g,i)=>{const p=statsPoint(cx,cy,maxR*(freq[g]/maxValue),i,total);return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>`;}).join('')}
-              ${axisLabels}
-              ${hitAreas}
-            </svg>
-            <div class="stats-tooltip" id="stats-tooltip"></div>
-          </div>
-          <p class="stats-legend">Frequency = number of training days per week.</p>
-        </div>
-        <div class="stats-grid" style="margin-top:2px;">
-          ${STATS_GROUPS.map(g=>`<div class="stats-metric"><div class="label">${STATS_LABELS[g]}</div><div class="value">${freq[g]}×</div></div>`).join('')}
-        </div>
+        <button class="stats3d-fs-btn" id="stats3d-fs-enter" aria-label="Expand to fullscreen">
+          <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+        </button>
       </div>
     </div>`;
 
-  bindStatsRadarTooltip(freq);
-  bindStatsShowMore();
   bindStatsRangeToggle();
   mountStats3D();
+  setupStats3DFullscreenUI();
 }
 
-function bindStatsRadarTooltip(freq){
-  const tooltip=document.getElementById('stats-tooltip');
-  const wrap=document.getElementById('stats-chart-wrap');
+// Builds the futuristic radar/spider chart used inside the fullscreen "Show graph"
+// panel — separate from the 3D view itself so it can be (re)built on demand without
+// touching the live Three.js instance. `valueMap` is group->number; `unit` is the
+// suffix shown after each number (e.g. "×" for times/week, "" for a plain count).
+function buildFuturisticRadarSvg(valueMap, unit){
+  unit = unit==null ? '×' : unit;
+  const labels = STATS_GROUPS.map(g=>STATS_LABELS[g]);
+  const cx=150, cy=150, maxR=100, rings=4, total=STATS_GROUPS.length;
+  const values = STATS_GROUPS.map(g=>valueMap[g]);
+  const maxValue=Math.max(1,...values);
+  const ringPolys=[];
+  for(let ring=1;ring<=rings;ring++){
+    const rr=maxR*ring/rings;
+    const pts=STATS_GROUPS.map((_,i)=>{const p=statsPoint(cx,cy,rr,i,total);return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;}).join(' ');
+    ringPolys.push(`<polygon class="fg-ring${ring===rings?' outer':''}" points="${pts}"/>`);
+  }
+  const axisLines=STATS_GROUPS.map((_,i)=>{
+    const p=statsPoint(cx,cy,maxR,i,total);
+    return `<line class="fg-axis" x1="${cx}" y1="${cy}" x2="${p.x.toFixed(1)}" y2="${p.y.toFixed(1)}"/>`;
+  }).join('');
+  const dataPts=STATS_GROUPS.map((g,i)=>{
+    const p=statsPoint(cx,cy,maxR*(valueMap[g]/maxValue),i,total);
+    return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+  }).join(' ');
+  const dots=STATS_GROUPS.map((g,i)=>{
+    const p=statsPoint(cx,cy,maxR*(valueMap[g]/maxValue),i,total);
+    return `<circle class="fg-dot" style="animation-delay:${(i*0.15).toFixed(2)}s" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5"/>`;
+  }).join('');
+  const axisLabels=STATS_GROUPS.map((g,i)=>{
+    const p=statsPoint(cx,cy,maxR+24,i,total);
+    let anchor='middle';
+    if(p.x<cx-8) anchor='end'; else if(p.x>cx+8) anchor='start';
+    let dy='0.35em';
+    if(p.y<cy-70) dy='0';
+    else if(p.y>cy+70) dy='1em';
+    return `<text class="fg-label" x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" text-anchor="${anchor}" dy="${dy}">${labels[i]} <tspan class="b">${valueMap[g]}${unit}</tspan></text>`;
+  }).join('');
+  const hitAreas=STATS_GROUPS.map((g,i)=>{
+    const p=statsPoint(cx,cy,maxR+10,i,total);
+    return `<circle class="stats-hit" data-stats-group="${g}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="25" aria-label="${labels[i]} ${valueMap[g]}${unit}"/>`;
+  }).join('');
+  return `<svg class="fg-chart" id="fg-radar" viewBox="0 0 300 300" role="img" aria-label="Muscle group chart">
+      <defs>
+        <radialGradient id="fg-sweep-grad"><stop offset="0%" stop-color="var(--accent)" stop-opacity=".55"/><stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/></radialGradient>
+        <clipPath id="fg-circle-clip"><circle cx="150" cy="150" r="100"/></clipPath>
+      </defs>
+      <g class="fg-chart-inner">
+        <g clip-path="url(#fg-circle-clip)">
+          <polygon class="fg-sweep" points="150,150 250,150 233,101" fill="url(#fg-sweep-grad)"/>
+        </g>
+        <g>${ringPolys.join('')}</g>
+        <g>${axisLines}</g>
+        <polygon class="fg-data" points="${dataPts}"/>
+        ${dots}
+        ${axisLabels}
+        ${hitAreas}
+      </g>
+    </svg>`;
+}
+
+// Samples points tracing the chart's rings + data polygon, used as the particle
+// system's landing/launch positions so particles visually "assemble into" (or
+// "explode out of") the exact shape the chart is about to show/just showed.
+function sampleRadarParticlePoints(valueMap){
+  const cx=150, cy=150, maxR=100, total=STATS_GROUPS.length;
+  const maxValue=Math.max(1,...STATS_GROUPS.map(g=>valueMap[g]));
+  const pts=[];
+  const lerp=(a,b,t)=>({x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t});
+  // outer ring, sparse
+  for(let i=0;i<total;i++){
+    const a=statsPoint(cx,cy,maxR,i,total), b=statsPoint(cx,cy,maxR,(i+1)%total,total);
+    for(let s=0;s<3;s++) pts.push(lerp(a,b,s/3));
+  }
+  // data polygon, denser (the "hero" shape)
+  const dataVerts = STATS_GROUPS.map((g,i)=>statsPoint(cx,cy,maxR*(valueMap[g]/maxValue),i,total));
+  for(let i=0;i<total;i++){
+    const a=dataVerts[i], b=dataVerts[(i+1)%total];
+    for(let s=0;s<5;s++) pts.push(lerp(a,b,s/5));
+  }
+  dataVerts.forEach(p=>{ pts.push(p); pts.push(p); }); // extra weight on the actual vertices
+  return pts;
+}
+
+// Spawns a burst of small particles that either converge from scattered positions
+// into `points` (mode 'build') or launch outward from `points` into scattered
+// positions (mode 'destroy'), then cleans itself up. Returns nothing useful —
+// callers coordinate timing via the constants below.
+const FG_PARTICLE_DURATION_MS = 950;
+const FG_PARTICLE_STAGGER_MS = 420;
+function spawnChartParticles(svgEl, points, mode){
+  const svgns='http://www.w3.org/2000/svg';
+  const g=document.createElementNS(svgns,'g');
+  g.setAttribute('class','fg-particle-layer');
+  const cx=150, cy=150;
+  points.forEach(pt=>{
+    const c=document.createElementNS(svgns,'circle');
+    const angle=Math.random()*Math.PI*2;
+    const dist=30+Math.random()*150;
+    const sx=cx+Math.cos(angle)*dist, sy=cy+Math.sin(angle)*dist;
+    c.setAttribute('r', (1.3+Math.random()*1.7).toFixed(2));
+    if(mode==='build'){
+      c.setAttribute('cx', sx.toFixed(1)); c.setAttribute('cy', sy.toFixed(1));
+      c.style.setProperty('--tx', (pt.x-sx).toFixed(1)+'px');
+      c.style.setProperty('--ty', (pt.y-sy).toFixed(1)+'px');
+      c.setAttribute('class','fg-particle fg-particle-build');
+    }else{
+      c.setAttribute('cx', pt.x.toFixed(1)); c.setAttribute('cy', pt.y.toFixed(1));
+      c.style.setProperty('--tx', (sx-pt.x).toFixed(1)+'px');
+      c.style.setProperty('--ty', (sy-pt.y).toFixed(1)+'px');
+      c.setAttribute('class','fg-particle fg-particle-destroy');
+    }
+    c.style.animationDelay = (Math.random()*FG_PARTICLE_STAGGER_MS).toFixed(0)+'ms';
+    g.appendChild(c);
+  });
+  svgEl.appendChild(g);
+  setTimeout(()=>g.remove(), FG_PARTICLE_DURATION_MS + FG_PARTICLE_STAGGER_MS + 80);
+}
+
+function bindStatsRadarTooltip(freq, root){
+  root = root || document;
+  const tooltip=root.querySelector('.stats-tooltip');
+  const wrap=root.querySelector('.fg-chart-wrap');
+  const chart=root.querySelector('.fg-chart');
+  if(!tooltip || !wrap || !chart) return;
   function showStatsTooltip(group, event){
     const value=freq[group], label=STATS_LABELS[group];
     tooltip.innerHTML=`<div class="tt-title">${label}</div><div class="tt-value">${value}× / WEEK</div>`;
@@ -2669,7 +2808,7 @@ function bindStatsRadarTooltip(freq){
     tooltip.classList.add('show');
   }
   function hideStatsTooltip(){ tooltip.classList.remove('show'); }
-  document.querySelectorAll('.stats-hit').forEach(hit=>{
+  wrap.querySelectorAll('.stats-hit').forEach(hit=>{
     const group=hit.dataset.statsGroup;
     hit.addEventListener('pointerenter',e=>showStatsTooltip(group,e));
     hit.addEventListener('pointermove',e=>{ if(e.pointerType==='mouse') showStatsTooltip(group,e); });
@@ -2677,20 +2816,9 @@ function bindStatsRadarTooltip(freq){
     hit.addEventListener('pointerdown',e=>{ e.stopPropagation(); showStatsTooltip(group,e); });
     hit.addEventListener('click',e=>{ e.stopPropagation(); showStatsTooltip(group,e); });
   });
-  document.getElementById('stats-radar').addEventListener('click',e=>{
+  chart.addEventListener('click',e=>{
     if(!e.target.closest('.stats-hit')) hideStatsTooltip();
   });
-}
-
-function bindStatsShowMore(){
-  const btn=document.getElementById('stats3d-showmore');
-  const panel=document.getElementById('stats3d-collapse');
-  btn.onclick=()=>{
-    state.statsExpanded=!state.statsExpanded;
-    btn.classList.toggle('open',state.statsExpanded);
-    panel.classList.toggle('open',state.statsExpanded);
-    btn.querySelector('span').textContent = state.statsExpanded ? 'Show less' : 'Show more';
-  };
 }
 
 function bindStatsRangeToggle(){
@@ -2726,6 +2854,12 @@ function mountStats3D(){
     onAnchorUpdate(category, pos){
       positionStatsFloatCard(pos);
     },
+    onRotationUpdate(theta){
+      updateStats3DGraphRotation(theta);
+    },
+    onAutoRotateChange(spinning){
+      // No UI hint by design — the model just quietly starts/stops spinning.
+    },
     onFail(){ showStats3DFallback(); }
   });
   if(!stats3dView) showStats3DFallback();
@@ -2733,13 +2867,197 @@ function mountStats3D(){
 function showStats3DFallback(){
   const container=document.getElementById('stats3d-wrap');
   if(!container) return;
+  const freq = statsStructuralFreq || Object.fromEntries(STATS_GROUPS.map(g=>[g,0]));
   container.innerHTML = `<div class="stats3d-fallback">
     <svg viewBox="0 0 24 24"><path d="M12 3l2.8 5.7L21 9.6l-4.5 4.4 1.1 6.1L12 17.2 6.4 20.1l1.1-6.1L3 9.6l6.2-.9L12 3z" stroke-linejoin="round"/></svg>
-    <p>3D view isn't available on this device.<br>Use "Show more" below for the frequency chart.</p>
+    <p>3D view isn't available on this device — showing your weekly frequency chart instead.</p>
+    <div class="fg-chart-wrap">${buildFuturisticRadarSvg(freq)}</div>
+    <div class="stats-tooltip"></div>
   </div>`;
-  if(!state.statsExpanded){
-    const btn=document.getElementById('stats3d-showmore');
-    if(btn) btn.click();
+  bindStatsRadarTooltip(freq, container);
+}
+
+/* ---- 3D fullscreen mode + futuristic graph panel ---- */
+let stats3dFsBound = false;
+function ensureStats3DFullscreenHost(){
+  let overlay = document.getElementById('stats3d-fs-overlay');
+  if(overlay) return overlay;
+  overlay = document.createElement('div');
+  overlay.id = 'stats3d-fs-overlay';
+  overlay.className = 'stats3d-fs-overlay';
+  overlay.innerHTML = `
+    <div class="stats3d-bg-grid"></div>
+    <div class="stats3d-fs-topbar">
+      <button class="stats3d-fs-iconbtn" id="stats3d-fs-close" aria-label="Close fullscreen">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg>
+      </button>
+      <div class="stats3d-fs-title"><b>BODY SCAN</b> // LIVE</div>
+      <button class="stats3d-fs-graphbtn" id="stats3d-fs-graph-toggle">
+        <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Graph</span>
+      </button>
+    </div>
+    <div class="stats3d-fs-stage" id="stats3d-fs-stage">
+      <div class="stats3d-graph-panel" id="stats3d-graph-panel">
+        <div class="stats3d-graph-inner">
+          <div class="stats3d-graph-head">
+            <h3 id="stats3d-graph-title">Weekly frequency</h3>
+            <span id="stats3d-graph-range">DAYS / WEEK</span>
+          </div>
+          <div class="fg-chart-wrap" id="fg-chart-wrap">
+            <span class="stats3d-corner tl"></span><span class="stats3d-corner tr"></span>
+            <span class="stats3d-corner bl"></span><span class="stats3d-corner br"></span>
+          </div>
+          <div class="stats-tooltip" id="fg-tooltip"></div>
+          <div class="fg-metrics" id="fg-metrics"></div>
+          <div class="stats3d-graph-swipe">Double-tap the chart for whole-split totals</div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function setupStats3DFullscreenUI(){
+  ensureStats3DFullscreenHost();
+  const enterBtn = document.getElementById('stats3d-fs-enter');
+  if(enterBtn) enterBtn.onclick = enterStats3DFullscreen;
+  if(stats3dFsBound) return;
+  stats3dFsBound = true;
+  document.getElementById('stats3d-fs-close').onclick = exitStats3DFullscreen;
+  document.getElementById('stats3d-fs-graph-toggle').onclick = toggleStats3DGraphPanel;
+  document.getElementById('fg-chart-wrap').addEventListener('dblclick', e=>{
+    e.preventDefault();
+    if(document.getElementById('stats3d-graph-panel').classList.contains('open')) switchStats3DGraphMode();
+  });
+}
+
+function enterStats3DFullscreen(){
+  const wrap = document.getElementById('stats3d-wrap');
+  const stage = document.getElementById('stats3d-fs-stage');
+  const overlay = ensureStats3DFullscreenHost();
+  if(!wrap || !stage) return;
+  stage.insertBefore(wrap, stage.firstChild);
+  overlay.classList.add('open');
+  document.body.classList.add('stats3d-fs-active');
+  state.stats3dFullscreen = true;
+  if(stats3dView) stats3dView.resize();
+}
+
+function exitStats3DFullscreen(){
+  const wrap = document.getElementById('stats3d-wrap');
+  const card = document.querySelector('.stats3d-card');
+  const overlay = document.getElementById('stats3d-fs-overlay');
+  if(wrap && card) card.appendChild(wrap);
+  if(overlay) overlay.classList.remove('open');
+  document.body.classList.remove('stats3d-fs-active');
+  state.stats3dFullscreen = false;
+  closeStats3DGraphPanel();
+  if(stats3dView) stats3dView.resize();
+}
+
+function toggleStats3DGraphPanel(){
+  const panel = document.getElementById('stats3d-graph-panel');
+  const btn = document.getElementById('stats3d-fs-graph-toggle');
+  if(!panel) return;
+  const opening = !panel.classList.contains('open');
+  if(opening) openStats3DGraphPanel(); else closeStats3DGraphPanel();
+  if(btn) btn.classList.toggle('active', opening);
+}
+
+// Group->value data for the two graph modes. 'week' = structural training-day
+// frequency (same as the old radar). 'split' = actual sets logged, summed across
+// the entire active split's history — the "whole split" view.
+function stats3DGraphData(mode){
+  const freq = statsStructuralFreq || Object.fromEntries(STATS_GROUPS.map(g=>[g,0]));
+  if(mode==='split'){
+    const vals={};
+    STATS_GROUPS.forEach(g=>{ vals[g]=statsForGroupActiveSplit(g, freq).sets; });
+    return {values:vals, unit:'', title:'Split volume', range:'SETS · ALL-TIME'};
+  }
+  return {values:freq, unit:'×', title:'Weekly frequency', range:'DAYS / WEEK'};
+}
+
+// Keeps the radar sweep beam's rotation mirroring the 3D model's live rotation —
+// only the sweep (the actual "radar" element), not the grid/labels/data shape,
+// which stay fixed and readable. Reads theta directly every frame rather than
+// tracking its own rotation state, so it automatically stays correct whether the
+// model is auto-rotating, being dragged, paused, or reverses direction. Sign is a
+// best guess at matching the model's on-screen spin direction; flip it if the
+// sweep ever turns out to spin the opposite way from the model.
+function updateStats3DGraphRotation(theta){
+  const panel = document.getElementById('stats3d-graph-panel');
+  if(!panel || !panel.classList.contains('open')) return;
+  const sweep = document.querySelector('#fg-chart-wrap .fg-sweep');
+  if(!sweep) return;
+  const deg = -(theta * 180 / Math.PI);
+  sweep.style.transform = `rotate(${deg.toFixed(2)}deg)`;
+}
+
+function renderStats3DGraphChart(mode, withParticles){
+  const chartWrap = document.getElementById('fg-chart-wrap');
+  const metricsWrap = document.getElementById('fg-metrics');
+  const titleEl = document.getElementById('stats3d-graph-title');
+  const rangeEl = document.getElementById('stats3d-graph-range');
+  if(!chartWrap) return;
+  const {values, unit, title, range} = stats3DGraphData(mode);
+  chartWrap.querySelectorAll('.fg-chart').forEach(el=>el.remove());
+  chartWrap.insertAdjacentHTML('afterbegin', buildFuturisticRadarSvg(values, unit));
+  const svg = chartWrap.querySelector('.fg-chart');
+  const inner = svg.querySelector('.fg-chart-inner');
+  if(titleEl) titleEl.textContent = title;
+  if(rangeEl) rangeEl.textContent = range;
+  if(metricsWrap){
+    const top3 = STATS_GROUPS.slice().sort((a,b)=>values[b]-values[a]).slice(0,3);
+    metricsWrap.innerHTML = top3.map(g=>`<div class="fg-metric"><div class="fm-label">${STATS_LABELS[g]}</div><div class="fm-value">${values[g]}${unit}</div></div>`).join('');
+  }
+  bindStatsRadarTooltip(values, chartWrap.parentElement);
+  if(withParticles){
+    inner.classList.add('hidden');
+    spawnChartParticles(svg, sampleRadarParticlePoints(values), 'build');
+    setTimeout(()=>inner.classList.remove('hidden'), FG_PARTICLE_DURATION_MS*0.55);
+  }
+  state.stats3dGraphMode = mode;
+}
+
+function openStats3DGraphPanel(){
+  const panel = document.getElementById('stats3d-graph-panel');
+  if(!panel) return;
+  state.stats3dGraphMode = 'week';
+  renderStats3DGraphChart('week', true);
+  panel.classList.add('open');
+  if(stats3dView && stats3dView.setAutoRotate) stats3dView.setAutoRotate(true);
+}
+
+function closeStats3DGraphPanel(){
+  const panel = document.getElementById('stats3d-graph-panel');
+  const btn = document.getElementById('stats3d-fs-graph-toggle');
+  if(panel) panel.classList.remove('open');
+  if(btn) btn.classList.remove('active');
+  if(stats3dView && stats3dView.setAutoRotate) stats3dView.setAutoRotate(false);
+}
+
+// Double-tap on the chart: destroy the current chart into particles, then build
+// the other mode's chart from particles the same way, in either direction.
+let stats3dGraphSwitching = false;
+function switchStats3DGraphMode(){
+  if(stats3dGraphSwitching) return;
+  stats3dGraphSwitching = true;
+  const chartWrap = document.getElementById('fg-chart-wrap');
+  const svg = chartWrap && chartWrap.querySelector('.fg-chart');
+  const inner = svg && svg.querySelector('.fg-chart-inner');
+  const nextMode = state.stats3dGraphMode==='week' ? 'split' : 'week';
+  if(svg && inner){
+    const {values} = stats3DGraphData(state.stats3dGraphMode);
+    inner.classList.add('hidden');
+    spawnChartParticles(svg, sampleRadarParticlePoints(values), 'destroy');
+    setTimeout(()=>{
+      renderStats3DGraphChart(nextMode, true);
+      stats3dGraphSwitching = false;
+    }, FG_PARTICLE_DURATION_MS + FG_PARTICLE_STAGGER_MS - 180);
+  } else {
+    renderStats3DGraphChart(nextMode, true);
+    stats3dGraphSwitching = false;
   }
 }
 function refreshStatsFloatCard(){
@@ -3615,6 +3933,12 @@ function installBackGuard(){
   history.pushState({ppTab:state.tab}, '', location.href);
   appBackGuardReady = true;
   window.addEventListener('popstate', e=>{
+    const fsOverlay = document.getElementById('stats3d-fs-overlay');
+    if(fsOverlay && fsOverlay.classList.contains('open')){
+      exitStats3DFullscreen();
+      history.pushState({ppTab:state.tab}, '', location.href);
+      return;
+    }
     if(document.querySelector('.modal-overlay') || document.getElementById('gallery-max-overlay')){
       closeModal(); closeGalleryMaximize();
       history.pushState({ppTab:state.tab}, '', location.href);
