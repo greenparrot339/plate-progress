@@ -540,6 +540,7 @@ window.Stats3D = (function () {
 
     this._onPointerMove = function (e) {
       if (!self._pointers.has(e.pointerId)) return;
+      e.preventDefault && e.preventDefault();
       self._pointers.set(e.pointerId, pos(e));
 
       if (self._pointers.size >= 2) {

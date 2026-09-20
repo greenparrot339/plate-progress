@@ -1,4 +1,4 @@
-const CACHE_NAME = 'plate-progress-v32-sweep-only-rotation';
+const CACHE_NAME = 'plate-progress-v33-mobile-touch-perf-fixes';
 const APP_SHELL = [
   './', './index.html', './manifest.json', './exercise-database.js', './stats3d.js', './body.glb',
   './icon-192.png', './icon-512.png'

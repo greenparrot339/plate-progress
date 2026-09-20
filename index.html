@@ -112,8 +112,8 @@
   .stats3d-fs-btn:active{background:rgba(232,179,44,.18);border-color:var(--accent);}
   .stats3d-fs-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 
-  body.stats3d-fs-active{overflow:hidden;}
-  .stats3d-fs-overlay{position:fixed;inset:0;z-index:400;background:
+  body.stats3d-fs-active{overflow:hidden;overscroll-behavior:none;}
+  .stats3d-fs-overlay{position:fixed;inset:0;z-index:400;overscroll-behavior:none;background:
       radial-gradient(ellipse at 50% 30%, #1a1d22 0%, #08090a 72%);
     display:none;flex-direction:column;touch-action:none;}
   .stats3d-fs-overlay.open{display:flex;}
@@ -135,10 +135,10 @@
   .stats3d-fs-graphbtn.active{background:var(--accent);color:#1a1305;box-shadow:0 0 18px rgba(232,179,44,.45);}
   .stats3d-fs-stage{position:relative;flex:1;min-height:0;}
   .stats3d-fs-stage .stats3d-wrap{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto;max-height:none;
-    border-radius:0;margin:0;background:transparent;}
+    border-radius:0;margin:0;background:transparent;overscroll-behavior:none;}
   .stats3d-fs-stage .stats3d-wrap .stats3d-fs-btn{display:none;}
 
-  .stats3d-graph-panel{position:absolute;top:0;right:0;bottom:0;width:100%;max-width:480px;z-index:5;
+  .stats3d-graph-panel{position:absolute;top:0;right:0;bottom:0;width:80vw;max-width:480px;z-index:5;
     display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 20px;
     background:linear-gradient(90deg,rgba(8,9,10,0) 0%,rgba(10,11,13,.72) 30%,rgba(10,11,13,.92) 100%);
     opacity:0;pointer-events:none;transform:translateX(14px);transition:opacity .4s ease,transform .4s cubic-bezier(.22,.75,.25,1);}
@@ -168,9 +168,10 @@
   .fg-metric .fm-value{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--accent);margin-top:2px;}
 
   /* particle build/destroy effect */
-  .fg-particle{fill:var(--accent);filter:drop-shadow(0 0 2px rgba(232,179,44,.8));}
-  .fg-particle-build{opacity:0;animation:fgParticleBuild .95s cubic-bezier(.16,.85,.24,1) forwards;}
-  .fg-particle-destroy{animation:fgParticleDestroy .7s cubic-bezier(.5,0,.85,1) forwards;}
+  .fg-particle{fill:var(--accent);}
+  .fg-particle-layer{filter:drop-shadow(0 0 2px rgba(232,179,44,.7));}
+  .fg-particle-build{opacity:0;animation:fgParticleBuild .95s cubic-bezier(.16,.85,.24,1) forwards;will-change:transform,opacity;}
+  .fg-particle-destroy{animation:fgParticleDestroy .7s cubic-bezier(.5,0,.85,1) forwards;will-change:transform,opacity;}
   @keyframes fgParticleBuild{
     0%{opacity:0;transform:translate(0,0) scale(.3);}
     18%{opacity:1;}
@@ -2743,15 +2744,15 @@ function sampleRadarParticlePoints(valueMap){
   // outer ring, sparse
   for(let i=0;i<total;i++){
     const a=statsPoint(cx,cy,maxR,i,total), b=statsPoint(cx,cy,maxR,(i+1)%total,total);
-    for(let s=0;s<3;s++) pts.push(lerp(a,b,s/3));
+    for(let s=0;s<2;s++) pts.push(lerp(a,b,s/2));
   }
   // data polygon, denser (the "hero" shape)
   const dataVerts = STATS_GROUPS.map((g,i)=>statsPoint(cx,cy,maxR*(valueMap[g]/maxValue),i,total));
   for(let i=0;i<total;i++){
     const a=dataVerts[i], b=dataVerts[(i+1)%total];
-    for(let s=0;s<5;s++) pts.push(lerp(a,b,s/5));
+    for(let s=0;s<3;s++) pts.push(lerp(a,b,s/3));
   }
-  dataVerts.forEach(p=>{ pts.push(p); pts.push(p); }); // extra weight on the actual vertices
+  dataVerts.forEach(p=>pts.push(p)); // extra weight on the actual vertices
   return pts;
 }
 
