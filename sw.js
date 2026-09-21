@@ -1,4 +1,4 @@
-const CACHE_NAME = 'plate-progress-v33-mobile-touch-perf-fixes';
+const CACHE_NAME = 'plate-progress-v34-self-healing-render-loop';
 const APP_SHELL = [
   './', './index.html', './manifest.json', './exercise-database.js', './stats3d.js', './body.glb',
   './icon-192.png', './icon-512.png'

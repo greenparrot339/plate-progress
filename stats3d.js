@@ -556,10 +556,12 @@ window.Stats3D = (function () {
           var pdy = mid.y - self._panStartMid.y;
           if (pdx !== 0 || pdy !== 0) {
             var rect = el.getBoundingClientRect();
-            var fovRad = self.camera.fov * Math.PI / 180;
-            var targetDistance = self.distance * Math.tan(fovRad / 2);
-            self._panLeft(2 * pdx * targetDistance / rect.height);
-            self._panUp(2 * pdy * targetDistance / rect.height);
+            if (rect.height > 0) {
+              var fovRad = self.camera.fov * Math.PI / 180;
+              var targetDistance = self.distance * Math.tan(fovRad / 2);
+              self._panLeft(2 * pdx * targetDistance / rect.height);
+              self._panUp(2 * pdy * targetDistance / rect.height);
+            }
             // Keep the pan within a reasonable radius of the model's natural
             // center so two fingers can't drag the view off into empty space
             // with no way back short of a page reload.
@@ -701,27 +703,47 @@ window.Stats3D = (function () {
     if (this.callbacks.onSelect) this.callbacks.onSelect(category);
   };
 
+  View.prototype._recoverFromBadState = function () {
+    var bad = !isFinite(this.theta) || !isFinite(this.phi) || !isFinite(this.distance) ||
+      !isFinite(this.target.x) || !isFinite(this.target.y) || !isFinite(this.target.z);
+    if (!bad) return;
+    this.theta = 0;
+    this.phi = Math.PI / 2.3;
+    this.distance = Math.max(this.minDistance, Math.min(this.maxDistance, 3.05));
+    this.target.copy(this._naturalTarget);
+    this._autoRotate = false;
+    this._pointers.clear();
+    this._pinchStartDistance = 0;
+    this._panStartMid = null;
+    this._updateCamera();
+  };
+
   View.prototype._tick = function () {
     if (this.disposed) return;
-    this._autoResizeCheck();
-    if (this._autoRotate && this._pointers.size === 0) {
-      this.theta += 0.0055 * (this._rotateDir || 1);
-      this._updateCamera();
-    }
-    this.renderer.render(this.scene, this.camera);
-    if (this.callbacks.onRotationUpdate) this.callbacks.onRotationUpdate(this.theta);
-    if (this.selected && this.model && this.model.anchors[this.selected]) {
-      var anchor = this.model.anchors[this.selected];
-      var worldPos = new THREE.Vector3();
-      anchor.getWorldPosition(worldPos);
-      var screen = worldPos.clone().project(this.camera);
-      var rect = this.canvas.getBoundingClientRect();
-      var x = (screen.x * 0.5 + 0.5) * rect.width;
-      var y = (-screen.y * 0.5 + 0.5) * rect.height;
-      var inFront = screen.z < 1;
-      if (this.callbacks.onAnchorUpdate) {
-        this.callbacks.onAnchorUpdate(this.selected, { x: x, y: y, w: rect.width, h: rect.height, visible: inFront });
+    try {
+      this._autoResizeCheck();
+      if (this._autoRotate && this._pointers.size === 0) {
+        this.theta += 0.0055 * (this._rotateDir || 1);
+        this._updateCamera();
       }
+      this.renderer.render(this.scene, this.camera);
+      if (this.callbacks.onRotationUpdate) this.callbacks.onRotationUpdate(this.theta);
+      if (this.selected && this.model && this.model.anchors[this.selected]) {
+        var anchor = this.model.anchors[this.selected];
+        var worldPos = new THREE.Vector3();
+        anchor.getWorldPosition(worldPos);
+        var screen = worldPos.clone().project(this.camera);
+        var rect = this.canvas.getBoundingClientRect();
+        var x = (screen.x * 0.5 + 0.5) * rect.width;
+        var y = (-screen.y * 0.5 + 0.5) * rect.height;
+        var inFront = screen.z < 1;
+        if (this.callbacks.onAnchorUpdate) {
+          this.callbacks.onAnchorUpdate(this.selected, { x: x, y: y, w: rect.width, h: rect.height, visible: inFront });
+        }
+      }
+    } catch (err) {
+      if (!this._loggedTickError) { this._loggedTickError = true; if (window.console) console.error('Stats3D frame error (recovered):', err); }
+      this._recoverFromBadState();
     }
     this._raf = requestAnimationFrame(this._tick);
   };
