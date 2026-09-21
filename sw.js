@@ -1,4 +1,4 @@
-const CACHE_NAME = 'plate-progress-v36-watchdog-and-mobile-graph-layout';
+const CACHE_NAME = 'plate-progress-v37-graph-mode-redesign';
 const APP_SHELL = [
   './', './index.html', './manifest.json', './exercise-database.js', './stats3d.js', './body.glb',
   './icon-192.png', './icon-512.png'
