@@ -370,6 +370,32 @@ window.Stats3D = (function () {
     this._loadModel();
     this._tick = this._tick.bind(this);
     this._raf = requestAnimationFrame(this._tick);
+
+    // Watchdog: runs independently of the render loop, so it can recover from
+    // failure modes that don't throw an exception (the try/catch in _tick only
+    // catches actual errors). Specifically guards against a pointer that never
+    // received a matching pointerup/pointercancel — which would permanently block
+    // auto-rotate from ever resuming and can leave a drag gesture stuck — and
+    // double-checks the camera state hasn't silently gone non-finite.
+    var self = this;
+    this._watchdogPointerStuckSince = null;
+    this._watchdog = setInterval(function () {
+      if (self.disposed) return;
+      self._recoverFromBadState();
+      if (self._pointers.size > 0) {
+        var now = Date.now();
+        if (!self._watchdogPointerStuckSince) self._watchdogPointerStuckSince = now;
+        else if (now - self._watchdogPointerStuckSince > 5000) {
+          self._pointers.clear();
+          self._dragStart = null;
+          self._pinchStartDistance = 0;
+          self._panStartMid = null;
+          self._watchdogPointerStuckSince = null;
+        }
+      } else {
+        self._watchdogPointerStuckSince = null;
+      }
+    }, 1000);
   }
 
   View.prototype._initThree = function () {
@@ -793,6 +819,7 @@ window.Stats3D = (function () {
     this.disposed = true;
     cancelAnimationFrame(this._raf);
     clearTimeout(this._autoRotateResumeTimer);
+    clearInterval(this._watchdog);
     window.removeEventListener('resize', this._onResize);
     var el = this.canvas;
     el.removeEventListener('pointerdown', this._onPointerDown);

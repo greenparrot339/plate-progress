@@ -81,7 +81,7 @@
   .classification-btn:hover{color:var(--accent);}
 
   /* stats 3d */
-  .stats3d-wrap{position:relative;width:100%;aspect-ratio:3/4;max-height:440px;min-height:300px;border-radius:calc(var(--radius) + 2px);overflow:hidden;background:#0a0b0d;margin:2px 0 4px;touch-action:none;}
+  .stats3d-wrap{position:relative;width:100%;aspect-ratio:3/4;max-height:440px;min-height:300px;border-radius:calc(var(--radius) + 2px);overflow:hidden;background:#0a0b0d;margin:2px 0 4px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
   .stats3d-wrap canvas{display:block;width:100%;height:100%;}
   .stats3d-leader{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
   .stats3d-leader line{stroke:var(--accent);stroke-width:1.4;opacity:.85;}
@@ -113,7 +113,8 @@
   .stats3d-fs-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 
   body.stats3d-fs-active{overflow:hidden;overscroll-behavior:none;}
-  .stats3d-fs-overlay{position:fixed;inset:0;z-index:400;overscroll-behavior:none;background:
+  .stats3d-fs-overlay{position:fixed;inset:0;z-index:400;overscroll-behavior:none;
+    user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;background:
       radial-gradient(ellipse at 50% 30%, #1a1d22 0%, #08090a 72%);
     display:none;flex-direction:column;touch-action:none;}
   .stats3d-fs-overlay.open{display:flex;}
@@ -138,12 +139,13 @@
     border-radius:0;margin:0;background:transparent;overscroll-behavior:none;}
   .stats3d-fs-stage .stats3d-wrap .stats3d-fs-btn{display:none;}
 
-  .stats3d-graph-panel{position:absolute;top:0;right:0;bottom:0;width:80vw;max-width:480px;z-index:5;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 20px;
-    background:linear-gradient(90deg,rgba(8,9,10,0) 0%,rgba(10,11,13,.72) 30%,rgba(10,11,13,.92) 100%);
+  .stats3d-graph-panel{position:absolute;top:0;right:0;bottom:0;width:62vw;max-width:480px;z-index:5;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 16px;
+    background:linear-gradient(90deg,rgba(8,9,10,0) 0%,rgba(10,11,13,.72) 40%,rgba(10,11,13,.92) 100%);
     opacity:0;pointer-events:none;transform:translateX(14px);transition:opacity .4s ease,transform .4s cubic-bezier(.22,.75,.25,1);}
-  .stats3d-graph-panel.open{opacity:1;pointer-events:auto;transform:translateX(0);}
-  .stats3d-graph-inner{position:relative;width:100%;max-width:380px;}
+  .stats3d-graph-panel.open{opacity:1;transform:translateX(0);}
+  .stats3d-graph-inner{position:relative;width:100%;max-width:380px;pointer-events:none;}
+  .stats3d-graph-panel.open .stats3d-graph-inner{pointer-events:auto;}
   .stats3d-graph-head{display:flex;flex-direction:column;align-items:center;gap:1px;margin-bottom:2px;text-align:center;}
   .stats3d-graph-head h3{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;}
   .stats3d-graph-head span{font-family:var(--font-mono);font-size:9.5px;color:var(--text-faint);letter-spacing:.05em;}
@@ -2986,13 +2988,19 @@ function stats3DGraphData(mode){
 // model is auto-rotating, being dragged, paused, or reverses direction. Sign is a
 // best guess at matching the model's on-screen spin direction; flip it if the
 // sweep ever turns out to spin the opposite way from the model.
+let stats3dGraphSweepEl = null;
+let stats3dGraphRotationSkip = 0;
 function updateStats3DGraphRotation(theta){
   const panel = document.getElementById('stats3d-graph-panel');
   if(!panel || !panel.classList.contains('open')) return;
-  const sweep = document.querySelector('#fg-chart-wrap .fg-sweep');
-  if(!sweep) return;
+  stats3dGraphRotationSkip = (stats3dGraphRotationSkip+1) % 2;
+  if(stats3dGraphRotationSkip !== 0) return; // ~30fps is plenty for this
+  if(!stats3dGraphSweepEl || !stats3dGraphSweepEl.isConnected){
+    stats3dGraphSweepEl = document.querySelector('#fg-chart-wrap .fg-sweep');
+  }
+  if(!stats3dGraphSweepEl) return;
   const deg = -(theta * 180 / Math.PI);
-  sweep.style.transform = `rotate(${deg.toFixed(2)}deg)`;
+  stats3dGraphSweepEl.style.transform = `rotate(${deg.toFixed(1)}deg)`;
 }
 
 function renderStats3DGraphChart(mode, withParticles){
