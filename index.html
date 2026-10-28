@@ -405,7 +405,45 @@
   .archive-item .name{font-size:14.5px;font-weight:500;}
   .archive-item .dates{font-size:11.5px;color:var(--text-faint);margin-top:2px;font-family:var(--font-mono);}
 
-  .chart-wrap{position:relative;width:100%;height:190px;margin:6px 0 4px;}
+  .chart-wrap{position:relative;width:100%;height:190px;margin:6px 0 4px;touch-action:manipulation;-webkit-user-select:none;user-select:none;}
+
+  /* ===== Maximizable charts (chart-max.js) ===== */
+  #chart-max-overlay{position:fixed;inset:0;z-index:120;background:rgba(10,11,13,.97);display:flex;flex-direction:column;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    opacity:0;transition:opacity .18s ease;touch-action:none;-webkit-user-select:none;user-select:none;}
+  #chart-max-overlay.open{opacity:1;}
+  .cm-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px 8px;}
+  .cm-title{font-family:var(--font-display);font-size:16px;letter-spacing:.03em;text-transform:uppercase;color:var(--accent);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+  .cm-tools{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+  .cm-btn,.cm-mode{height:34px;min-width:34px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);
+    display:flex;align-items:center;justify-content:center;padding:0 8px;font-family:var(--font-display);font-size:12px;letter-spacing:.05em;text-transform:uppercase;}
+  .cm-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;}
+  .cm-mode{color:var(--accent);}
+  .cm-btn:active,.cm-mode:active{background:var(--accent-dim);}
+  .cm-close{color:var(--rust);}
+  .cm-zoom{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);min-width:38px;text-align:center;}
+  .cm-readout{display:flex;gap:8px;padding:0 14px 8px;overflow-x:auto;}
+  .cm-chip{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 10px;display:flex;flex-direction:column;min-width:68px;flex-shrink:0;}
+  .cm-chip span{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;}
+  .cm-chip b{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--text);}
+  .cm-stage{flex:1;min-height:0;position:relative;margin:0 8px;touch-action:none;}
+  .cm-stage canvas{width:100%!important;height:100%!important;touch-action:none;}
+  .cm-hint{padding:8px 14px 12px;font-size:11.5px;color:var(--text-faint);text-align:center;}
+  /* ===== Rest day ===== */
+  .rest-day-panel{position:relative;text-align:center;padding:26px 18px 30px;border:1px solid var(--border);border-radius:var(--radius);
+    background:radial-gradient(120% 90% at 50% 0%, rgba(232,179,44,.07), transparent 60%), var(--surface);overflow:hidden;}
+  .rest-day-panel .rest-art{width:100%;max-width:340px;height:auto;display:block;margin:0 auto 18px;opacity:.96;}
+  .rest-day-panel h2{font-size:20px;margin-bottom:8px;color:var(--accent);}
+  .rest-day-panel p{margin:0 auto;max-width:300px;font-size:13px;line-height:1.55;color:var(--text-dim);}
+  .rest-art .rest-stars{animation:restTwinkle 3.6s ease-in-out infinite;}
+  .rest-art .rest-z text{opacity:0;animation:restZ 3.2s ease-in-out infinite;}
+  .rest-art .rest-z .z2{animation-delay:.8s;} .rest-art .rest-z .z3{animation-delay:1.6s;}
+  @keyframes restZ{0%{opacity:0;transform:translate(-6px,8px);}30%{opacity:.95;}100%{opacity:0;transform:translate(8px,-10px);}}
+  @keyframes restTwinkle{0%,100%{opacity:.95;}50%{opacity:.45;}}
+  @media (prefers-reduced-motion:reduce){.rest-art .rest-stars,.rest-art .rest-z text{animation:none;opacity:.8;}}
+  .rest-badge{font-family:var(--font-display);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);
+    background:var(--accent-dim);border-radius:6px;padding:4px 9px;}
   .segmented{display:flex;background:var(--surface2);border-radius:8px;padding:3px;gap:3px;margin-bottom:14px;}
   .segmented button{flex:1;background:none;border:none;color:var(--text-faint);padding:8px 4px;border-radius:6px;
     font-size:12.5px;font-weight:500;font-family:var(--font-display);text-transform:uppercase;letter-spacing:0.02em;}
@@ -558,6 +596,7 @@
 
 <script src="exercise-database.js"></script>
 <script src="stats3d.js"></script>
+<script src="chart-max.js"></script>
 <script>
 /* ============ STATE ============ */
 let DB = { splits: [], exercises: [], sets: [], exerciseClassificationOverrides: {}, exerciseDatabase: null };
@@ -896,6 +935,59 @@ function setsOfExercise(exId){
   return DB.sets.filter(s=>ids.has(s.exerciseId)).sort((a,b)=> a.date===b.date ? setSortValue(a)-setSortValue(b) : (a.date<b.date?-1:1) );
 }
 function exerciseById(id){ return DB.exercises.find(e=>e.id===id); }
+// A "rest day" is a split day named Rest / Rest day / Break (case-insensitive; extra spaces,
+// hyphens and underscores are ignored, so "REST-DAY" and " break " count too). Such days
+// never hold exercises: Log and Split hide every "add exercise" control for them.
+function isRestDayName(name){
+  const n = String(name||'').toLowerCase().replace(/[^a-z]+/g,' ').trim();
+  return n==='rest' || n==='rest day' || n==='restday' || n==='break';
+}
+function isRestDay(day){ return !!day && isRestDayName(day.name); }
+const REST_ILLUSTRATION_SVG = `<svg class="rest-art" viewBox="0 0 320 240" role="img" aria-label="Someone sleeping peacefully in bed under the moon">
+  <defs>
+    <linearGradient id="rest-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1E2430"/><stop offset="1" stop-color="#171B22"/></linearGradient>
+    <linearGradient id="rest-blanket" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4A3D1C"/><stop offset="1" stop-color="#2B2512"/></linearGradient>
+  </defs>
+  <rect width="320" height="240" rx="18" fill="url(#rest-sky)"/>
+  <g class="rest-stars" fill="#EDEAE3">
+    <circle cx="44" cy="38" r="1.6"/><circle cx="92" cy="22" r="1.1"/><circle cx="150" cy="46" r="1.4"/>
+    <circle cx="214" cy="26" r="1.2"/><circle cx="268" cy="64" r="1.6"/><circle cx="60" cy="86" r="1.1"/><circle cx="286" cy="22" r="1"/>
+  </g>
+  <path d="M244 40a30 30 0 1 0 22 52 24 24 0 0 1-22-52z" fill="#E8B32C" opacity=".92"/>
+  <rect x="26" y="150" width="268" height="54" rx="8" fill="#2A2F37"/>
+  <rect x="26" y="138" width="14" height="86" rx="5" fill="#3A404A"/>
+  <rect x="280" y="146" width="14" height="78" rx="5" fill="#3A404A"/>
+  <rect x="38" y="132" width="70" height="30" rx="14" fill="#EDEAE3" opacity=".92"/>
+  <circle cx="86" cy="128" r="17" fill="#D9B48F"/>
+  <path d="M69 123c2-12 20-16 30-6-9 1-18 2-30 6z" fill="#3A2B20"/>
+  <path d="M78 130q3 3 6 0M92 130q3 3 6 0" stroke="#3A2B20" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <path d="M60 150h224a8 8 0 0 1 8 8v30a8 8 0 0 1-8 8H60z" fill="url(#rest-blanket)"/>
+  <path d="M60 164h232M60 178h232" stroke="#E8B32C" stroke-opacity=".18" stroke-width="2"/>
+  <g class="rest-z" fill="#E8B32C" font-family="Oswald,sans-serif" font-weight="600">
+    <text class="z1" x="118" y="108" font-size="20">Z</text>
+    <text class="z2" x="140" y="86" font-size="26">Z</text>
+    <text class="z3" x="168" y="60" font-size="32">Z</text>
+  </g>
+</svg>`;
+// Day-scoped variant used ONLY by the Log tab (listing a day's logged sets, set numbering,
+// warm-up numbering, duplicate checks). The same exercise can exist on several days; its
+// history is pooled for Progress/Stats/PR (setsOfExercise above), but what is *logged on a
+// given day* must never show up under — or collide with set numbers of — the same-named
+// exercise on another day.
+function sameDayExerciseIds(ex){
+  if(!ex) return [];
+  if(ex.archived) return [ex.id];
+  const key = exerciseIdentityKey(ex.name);
+  if(!key) return [ex.id];
+  return DB.exercises.filter(e=> !e.archived && e.splitId===ex.splitId && e.dayId===ex.dayId && exerciseIdentityKey(e.name)===key).map(e=>e.id);
+}
+function setsOfExerciseInDay(exId){
+  const ex = exerciseById(exId);
+  if(!ex) return [];
+  const ids = new Set(sameDayExerciseIds(ex));
+  return DB.sets.filter(s=>ids.has(s.exerciseId)).sort((a,b)=> a.date===b.date ? setSortValue(a)-setSortValue(b) : (a.date<b.date?-1:1) );
+}
+
 function dayById(dayId){ for(const sp of DB.splits){ const d=(sp.days||[]).find(x=>x.id===dayId); if(d) return d; } return null; }
 async function saveMeta(){ try{ await idbSet('appMeta', DB_META); }catch(err){ console.error('meta save failed',err); } }
 
@@ -1026,6 +1118,7 @@ function render(){
 // and vice versa moving left.
 let tabSwitching = false;
 function goToTab(newTab, fromHistory){
+  if(window.ChartMax && ChartMax.isOpen()) ChartMax.close();
   if(newTab===state.tab || tabSwitching) return;
   if(galleryMaximizeOpen) closeGalleryMaximize(); // never leave Split with the overlay still open
   const oldIdx = TAB_ORDER.indexOf(state.tab);
@@ -1076,7 +1169,7 @@ document.querySelectorAll('.navbtn').forEach(b=>{
     // tab-swipe gesture compete with it.
     if(t.closest('.day-scroll') || t.closest('.chart-wrap') || t.closest('.segmented') ||
        t.closest('select') || t.closest('input') || t.closest('button') || t.closest('.stats3d-wrap') ||
-       t.closest('.split-gallery-track') || t.closest('#gallery-max-overlay')) return;
+       t.closest('.split-gallery-track') || t.closest('#gallery-max-overlay') || t.closest('#chart-max-overlay')) return;
     const touch = e.touches[0];
     sx=touch.clientX; sy=touch.clientY; st=Date.now(); tracking=true;
   }, {passive:true});
@@ -1345,6 +1438,7 @@ function openRenameExerciseModal(exerciseId){
 }
 
 function openExerciseModal(splitId, dayId){
+  if(isRestDay(dayById(dayId))){ toast('Rest days can\'t have exercises'); return; }
   // Suggest exercise names already used elsewhere in this split, so picking an existing
   // one (rather than retyping a slightly different spelling/order) is the easy default.
   const suggestionNames = [...new Map(
@@ -1494,7 +1588,7 @@ function confirmRemoveExercise(ex){
    wrapper used only in Gallery; List mode renders identically to before. */
 function renderDayCard(day, animateClass='', opts={}){
   const exs = exercisesOfDay(day.id);
-  const listHtml = exs.length===0 ? `<p style="font-size:12.5px;color:var(--text-faint);padding:6px 0;">No exercises yet.</p>` :
+  const listHtml = isRestDay(day) ? `<p style="font-size:12.5px;color:var(--text-faint);padding:6px 0;">Rest day &mdash; no exercises.</p>` : exs.length===0 ? `<p style="font-size:12.5px;color:var(--text-faint);padding:6px 0;">No exercises yet.</p>` :
     `<div class="exercise-list" data-daylist="${day.id}">` +
     exs.map(ex=>{
       const sets = setsOfExercise(ex.id);
@@ -1510,9 +1604,10 @@ function renderDayCard(day, animateClass='', opts={}){
       </div>`;
     }).join('') +
     `</div>`;
+  const restDay = isRestDay(day);
   const header = `<div class="row-between" style="margin-bottom:8px;">
     <h3 style="font-size:14px;">${esc(day.name)}</h3>
-    <button class="btn btn-ghost btn-sm" data-addex="${day.id}">+ Exercise</button>
+    ${restDay ? '<span class="rest-badge">Rest</span>' : `<button class="btn btn-ghost btn-sm" data-addex="${day.id}">+ Exercise</button>`}
   </div>`;
   if(opts.scrollable){
     return `<div class="card split-day-card gallery-card-flex ${animateClass}" data-gallery-day="${day.id}">
@@ -2097,59 +2192,7 @@ function attachExerciseReorder(listEl, dayId){
 }
 
 /* ============ TAB: LOG ============ */
-function renderLog(){
-  const split = activeSplit();
-  if(!state.logDate) state.logDate = todayStr();
-  const isToday = state.logDate === todayStr();
-  setHeader(isToday ? 'Today' : 'Logging for', fmtDate(state.logDate), null, null);
-  if(!split){ renderOnboarding(); return; }
-
-  if(!state.logDayId || !split.days.some(d=>d.id===state.logDayId)) state.logDayId = split.days[0].id;
-  const exs = exercisesOfDay(state.logDayId);
-
-  let html = `<div class="day-scroll">` +
-    split.days.map(d=>`<button class="day-chip ${d.id===state.logDayId?'active':''}" data-day="${d.id}">${esc(d.name)}</button>`).join('') +
-    `</div>`;
-
-  html += `<div class="log-date-bar">
-    <span class="ldb-label">Logging for</span>
-    <input type="date" id="log-date-input" value="${state.logDate}">
-    ${!isToday ? `<button class="log-date-today" id="log-today-btn">Today</button>` : ''}
-  </div>`;
-
-  html += buildHistoryCardHtml();
-
-  if(exs.length===0){
-    html += `<div class="empty">
-      <svg viewBox="0 0 24 24"><path d="M6 4v16M18 4v16M2 9h4M2 15h4M18 9h4M18 15h4" stroke-linecap="round"/></svg>
-      <p>No exercises on this day yet.</p>
-      <button class="btn btn-accent" id="log-addex">+ Add exercise</button>
-    </div>`;
-  } else {
-    html += exs.map(ex=>{
-      const daySets = setsOfExercise(ex.id).filter(s=>s.date===state.logDate);
-      return `<div class="card">
-        <div class="row-between" style="margin-bottom:${daySets.length?'6px':'0'};">
-          <h3 style="font-size:14.5px;"><span class="log-exname" data-quickex="${ex.id}">${esc(ex.name)}</span>${classificationSource(ex.name)==='unknown' ? '<span class="exname-badge">Unclassified</span>' : ''}</h3>
-          <button class="btn btn-accent btn-sm" data-logset="${ex.id}">+ Set</button>
-        </div>
-        ${(()=>{let logWarmupNo=0; return daySets.map(s=>{
-          const workingSets = setsOfExercise(ex.id).filter(x=>isWorkingSet(x) && Number(x.weight)>0 && Number(x.reps)>0);
-          const maxWorkingWeight = workingSets.length ? Math.max(...workingSets.map(x=>Number(x.weight)||0)) : -1;
-          const isWarm = isWarmupSet(s);
-          const isPr = !isWarm && Number(s.weight)===maxWorkingWeight && Number(s.weight)>0 && Number(s.reps)>0;
-          return `<div class="set-log-row ${isPr?'pr ':''}${isWarm?'warmup':''}" data-editset="${s.id}" data-exid="${ex.id}">
-            <div class="setnum">${esc(isWarm ? (/^W\d+$/i.test(String(s.setNumber||'')) ? String(s.setNumber).toUpperCase() : 'W'+(++logWarmupNo)) : String(s.setNumber))}</div>
-            <div class="val weight">${s.weight}<span class="unit">kg</span></div>
-            <div class="val">${s.reps}<span class="unit">reps</span></div>
-            <button class="icon-btn" data-delset="${s.id}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button>
-          </div>`;
-        }).join('');})()}
-      </div>`;
-    }).join('') + `<button class="btn btn-ghost btn-block" id="log-addex2" style="margin-top:2px;">+ Add exercise to this day</button>`;
-  }
-
-  $main.innerHTML = html;
+function bindLogDayChips(split){
   document.querySelectorAll('[data-day]').forEach(b=>{
     let timer = null;
     let longPressed = false;
@@ -2189,6 +2232,77 @@ function renderLog(){
     });
     b.addEventListener('contextmenu', e=> e.preventDefault());
   });
+}
+function renderLog(){
+  const split = activeSplit();
+  if(!state.logDate) state.logDate = todayStr();
+  const isToday = state.logDate === todayStr();
+  setHeader(isToday ? 'Today' : 'Logging for', fmtDate(state.logDate), null, null);
+  if(!split){ renderOnboarding(); return; }
+
+  if(!state.logDayId || !split.days.some(d=>d.id===state.logDayId)) state.logDayId = split.days[0].id;
+  const exs = exercisesOfDay(state.logDayId);
+
+  let html = `<div class="day-scroll">` +
+    split.days.map(d=>`<button class="day-chip ${d.id===state.logDayId?'active':''}" data-day="${d.id}">${esc(d.name)}</button>`).join('') +
+    `</div>`;
+
+  html += `<div class="log-date-bar">
+    <span class="ldb-label">Logging for</span>
+    <input type="date" id="log-date-input" value="${state.logDate}">
+    ${!isToday ? `<button class="log-date-today" id="log-today-btn">Today</button>` : ''}
+  </div>`;
+
+  const restDay = isRestDay(dayById(state.logDayId));
+  if(restDay){
+    html += `<div class="rest-day-panel">
+      ${REST_ILLUSTRATION_SVG}
+      <h2>Rest day</h2>
+      <p>Recovery is part of the program. Nothing to log today &mdash; sleep well, eat well, and come back stronger.</p>
+    </div>`;
+    $main.innerHTML = html;
+    bindLogDayChips(split);
+    const dateInputR = document.getElementById('log-date-input');
+    if(dateInputR) dateInputR.onchange = e=>{ state.logDate = e.target.value || todayStr(); render(); };
+    const todayBtnR = document.getElementById('log-today-btn');
+    if(todayBtnR) todayBtnR.onclick = ()=>{ state.logDate = todayStr(); render(); };
+    return;
+  }
+
+  html += buildHistoryCardHtml();
+
+  if(exs.length===0){
+    html += `<div class="empty">
+      <svg viewBox="0 0 24 24"><path d="M6 4v16M18 4v16M2 9h4M2 15h4M18 9h4M18 15h4" stroke-linecap="round"/></svg>
+      <p>No exercises on this day yet.</p>
+      <button class="btn btn-accent" id="log-addex">+ Add exercise</button>
+    </div>`;
+  } else {
+    html += exs.map(ex=>{
+      const daySets = setsOfExerciseInDay(ex.id).filter(s=>s.date===state.logDate);
+      return `<div class="card">
+        <div class="row-between" style="margin-bottom:${daySets.length?'6px':'0'};">
+          <h3 style="font-size:14.5px;"><span class="log-exname" data-quickex="${ex.id}">${esc(ex.name)}</span>${classificationSource(ex.name)==='unknown' ? '<span class="exname-badge">Unclassified</span>' : ''}</h3>
+          <button class="btn btn-accent btn-sm" data-logset="${ex.id}">+ Set</button>
+        </div>
+        ${(()=>{let logWarmupNo=0; return daySets.map(s=>{
+          const workingSets = setsOfExercise(ex.id).filter(x=>isWorkingSet(x) && Number(x.weight)>0 && Number(x.reps)>0);
+          const maxWorkingWeight = workingSets.length ? Math.max(...workingSets.map(x=>Number(x.weight)||0)) : -1;
+          const isWarm = isWarmupSet(s);
+          const isPr = !isWarm && Number(s.weight)===maxWorkingWeight && Number(s.weight)>0 && Number(s.reps)>0;
+          return `<div class="set-log-row ${isPr?'pr ':''}${isWarm?'warmup':''}" data-editset="${s.id}" data-exid="${ex.id}">
+            <div class="setnum">${esc(isWarm ? (/^W\d+$/i.test(String(s.setNumber||'')) ? String(s.setNumber).toUpperCase() : 'W'+(++logWarmupNo)) : String(s.setNumber))}</div>
+            <div class="val weight">${s.weight}<span class="unit">kg</span></div>
+            <div class="val">${s.reps}<span class="unit">reps</span></div>
+            <button class="icon-btn" data-delset="${s.id}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button>
+          </div>`;
+        }).join('');})()}
+      </div>`;
+    }).join('') + `<button class="btn btn-ghost btn-block" id="log-addex2" style="margin-top:2px;">+ Add exercise to this day</button>`;
+  }
+
+  $main.innerHTML = html;
+  bindLogDayChips(split);
   const a1=document.getElementById('log-addex'), a2=document.getElementById('log-addex2');
   if(a1) a1.onclick = ()=>openExerciseModal(split.id, state.logDayId);
   if(a2) a2.onclick = ()=>openExerciseModal(split.id, state.logDayId);
@@ -2345,7 +2459,7 @@ function openSetModal(exerciseId, editSetId){
   const ex = exerciseById(exerciseId);
   const editSet = editSetId ? DB.sets.find(s=>s.id===editSetId) : null;
   const date = editSet ? editSet.date : (state.logDate || todayStr());
-  const existingOnDate = setsOfExercise(exerciseId).filter(s=>s.date===date && s.id!==editSetId);
+  const existingOnDate = setsOfExerciseInDay(exerciseId).filter(s=>s.date===date && s.id!==editSetId);
   const existingNumbers = existingOnDate.map(s=>Number(s.setNumber)||0);
   const highestExistingSetNum = existingNumbers.length ? Math.max(...existingNumbers) : 0;
   const nextSetNum = editSet ? editSet.setNumber : highestExistingSetNum + 1;
@@ -2385,7 +2499,7 @@ function openSetModal(exerciseId, editSetId){
     // This keeps a new day's first added set at #1, then #2, #3, etc.
     const currentDate = document.getElementById('m-date')?.value || date;
     const nums = [
-      ...setsOfExercise(exerciseId)
+      ...setsOfExerciseInDay(exerciseId)
         .filter(s=>s.date===currentDate && (!editSetId || s.id!==editSetId))
         .map(s=>Number(s.setNumber)||0),
       ...rows.map(r=>Number(r.setNumber)||0)
@@ -2394,7 +2508,7 @@ function openSetModal(exerciseId, editSetId){
   }
 
   function existingWarmupNumbers(currentDate){
-    return new Set(setsOfExercise(exerciseId)
+    return new Set(setsOfExerciseInDay(exerciseId)
       .filter(s=>s.date===currentDate && (!editSetId || s.id!==editSetId) && isWarmupSet(s))
       .map(s=>{ const m=String(s.setNumber||'').match(/^W(\d+)$/i); return m?Number(m[1]):0; })
       .filter(n=>n>0));
@@ -2491,7 +2605,7 @@ function openSetModal(exerciseId, editSetId){
     // newly toggled warm-up to become W2 rather than colliding with W1.
     assignWarmupLabels();
     const preserveSingleEditNumber = !!(editSet && rows.length===1);
-    const takenWorking = new Set(setsOfExercise(exerciseId)
+    const takenWorking = new Set(setsOfExerciseInDay(exerciseId)
       .filter(s=>s.date===d && (!editSetId || s.id!==editSetId) && !isWarmupSet(s))
       .map(s=>Number(s.setNumber)||0).filter(n=>n>0));
     let workingCursor=0;
@@ -2514,7 +2628,7 @@ function openSetModal(exerciseId, editSetId){
     const invalid = rows.some(r=>!r.setNumber || !Number.isFinite(r.weight) || r.weight<0 || !r.reps || r.reps<1);
     const numbers = rows.map(r=>r.setNumber);
     const duplicateNumbers = numbers.some((n,i)=>numbers.indexOf(n)!==i);
-    const takenNumbers = new Set(setsOfExercise(exerciseId).filter(s=>s.date===d && (!editSetId || s.id!==editSetId)).map(s=>String(s.setNumber)));
+    const takenNumbers = new Set(setsOfExerciseInDay(exerciseId).filter(s=>s.date===d && (!editSetId || s.id!==editSetId)).map(s=>String(s.setNumber)));
     const clashes = numbers.some(n=>takenNumbers.has(n));
     if(invalid || !d){
       errEl.textContent = 'Fill in a valid set number, weight, reps, and date for every set.';
@@ -3535,6 +3649,7 @@ function renderProgressExerciseMode(){
                y:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'}, beginAtZero:true } } }
   });
 
+  maxifyChart(charts.line, {title:'Progress — '+metricLabel, yName:metricLabel, yUnit: state.progressMetric==='reps'?'':' kg'});
   charts.scatter = new Chart(document.getElementById('chart-scatter'), {
     type:'scatter',
     data:{ datasets:[{ label:'Sets', data: sets.map(s=>({x:s.weight,y:s.reps})), backgroundColor:'#C1543A', borderColor:'#C1543A',
@@ -3544,6 +3659,8 @@ function renderProgressExerciseMode(){
       scales:{ x:{ title:{display:true,text:'Weight (kg)',color:'#9A9FA6',font:{size:11}}, ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'} },
                y:{ title:{display:true,text:'Reps',color:'#9A9FA6',font:{size:11}}, ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'}, beginAtZero:true } } }
   });
+
+  maxifyChart(charts.scatter, {title:'Weight vs reps (every set)', xName:'Weight', xUnit:' kg', yName:'Reps', yUnit:''});
 
   if(weightKeys.length>=2){
     const avgRepsByWeight = weightKeys.map(w=> +(byWeight[w].reduce((a,b)=>a+b,0)/byWeight[w].length).toFixed(1));
@@ -3555,6 +3672,7 @@ function renderProgressExerciseMode(){
         scales:{ x:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{display:false} },
                  y:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'}, beginAtZero:true } } }
     });
+    maxifyChart(charts.bar, {title:'Average reps by weight used', yName:'Avg reps', yUnit:''});
   }
 }
 
@@ -3740,6 +3858,7 @@ function renderProgressDayMode(){
         scales:{ x:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'} },
                  y:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'}, beginAtZero:true } } }
     });
+    maxifyChart(charts.dayTrend, {title:'Day volume trend', yName:'Volume', yUnit:' kg'});
   }
 }
 
@@ -3915,6 +4034,7 @@ function renderProgressSplitMode(){
           scales:{ x:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'} },
                    y:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'}, title:{display:true,text:'Weight (kg)',color:'#9A9FA6',font:{size:11}} } } }
       });
+      maxifyChart(charts.splitShared, {title:'Shared exercise — top weight by split', yName:'Weight', yUnit:' kg'});
     }
   }
 }
@@ -3927,6 +4047,15 @@ function bindProgressSelectors(){
 }
 
 function destroyCharts(){ Object.values(charts).forEach(c=>{ if(c) c.destroy(); }); charts={}; }
+// Make a small Progress chart double-tap / expand-button maximizable (see chart-max.js).
+// The pristine user config is snapshotted as JSON; the full-screen chart is rebuilt from it.
+function maxifyChart(chart, meta){
+  try{
+    if(!chart || !window.ChartMax) return;
+    const cfg = chart.config && (chart.config._config || chart.config);
+    ChartMax.attach(chart.canvas, JSON.stringify({type:cfg.type, data:cfg.data, options:cfg.options}), meta||{});
+  }catch(err){ console.warn('Chart maximize unavailable', err); }
+}
 
 let appBackGuardReady=false;
 let lastLeaveWarningAt=0;
@@ -3937,6 +4066,11 @@ function installBackGuard(){
   history.pushState({ppTab:state.tab}, '', location.href);
   appBackGuardReady = true;
   window.addEventListener('popstate', e=>{
+    if(window.ChartMax && ChartMax.isOpen()){
+      ChartMax.close();
+      history.pushState({ppTab:state.tab}, '', location.href);
+      return;
+    }
     const fsOverlay = document.getElementById('stats3d-fs-overlay');
     if(fsOverlay && fsOverlay.classList.contains('open')){
       exitStats3DFullscreen();
