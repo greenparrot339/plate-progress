@@ -90,6 +90,7 @@ window.ChartMax = (function () {
     scales.y.ticks = scales.y.ticks || {};
     scales.x.ticks.font = { size: 11.5 };
     scales.y.ticks.font = { size: 11.5 };
+    scales.y.afterFit = function (sc) { sc.width = kind === 'scatter' ? 58 : 46; };
 
     var n = 0;
     if (L) {
@@ -228,15 +229,15 @@ window.ChartMax = (function () {
     var g = 1, best = Infinity;
     for (var m = 1; m < n - 1; m++) { var d = Math.hypot(rx[m] - press.x, ry[m] - press.y); if (d < best) { best = d; g = m; } }
     var W = Math.max(120, chart.chartArea.width);
-    var c = W * 5.5;                       // wave speed, px/s
-    var lam = Math.max(40, L * 0.2);       // how far a pull reaches along the line, px
+    var c = W * 2.6;                       // wave speed, px/s
+    var lam = Math.min(L * 0.25, Math.max(46, W * 0.17)); // how far a pull reaches along the line, px (local!)
     var kn = (c / h) * (c / h), kr = (c / lam) * (c / lam);
     var w1 = Math.sqrt(kr + Math.pow(Math.PI * c / L, 2));
     return {
       on: true, ds: di, n: n, h: h, g: g, rx: rx, ry: ry, dataNode: dataNode, pts: pts.length,
       ux: new Float32Array(n), uy: new Float32Array(n), vx: new Float32Array(n), vy: new Float32Array(n),
       ax: new Float32Array(n), ay: new Float32Array(n),
-      kn: kn, kr: kr, cd: 2 * 0.07 * w1, cv: 0.04 * c / h, dt: 0.4 * h / c,
+      kn: kn, kr: kr, cd: 2 * 0.11 * w1, cv: 0.04 * c / h, dt: 0.4 * h / c,
       pinned: true, px: 0, py: 0, fvx: 0, fvy: 0, raf: 0, last: 0, chart: chart
     };
   }
@@ -353,31 +354,36 @@ window.ChartMax = (function () {
   }
 
   /* ---------------- view (zoom / pan) ---------------- */
-  function setView(S, v, silent) {
+  function viewLimits(S) {
     var b = S.base;
-    var minSx = Math.min(b.x1 - b.x0, S.kind === 'scatter' ? (b.x1 - b.x0) * 0.03 : Math.max((b.x1 - b.x0) * 0.04, 2));
+    var minSx = Math.min(b.x1 - b.x0, S.kind === 'scatter' ? (b.x1 - b.x0) * 0.03 : Math.max((b.x1 - b.x0) * 0.04, 1.5));
     var minSy = (b.y1 - b.y0) * 0.03;
-    var sx = clamp(v.x1 - v.x0, minSx, b.x1 - b.x0), sy = clamp(v.y1 - v.y0, minSy, b.y1 - b.y0);
-    var cx = (v.x0 + v.x1) / 2, cy = (v.y0 + v.y1) / 2;
-    var x0 = clamp(cx - sx / 2, b.x0, b.x1 - sx), y0 = clamp(cy - sy / 2, b.y0, b.y1 - sy);
+    return { minSx: minSx, minSy: minSy, maxSx: b.x1 - b.x0, maxSy: b.y1 - b.y0 };
+  }
+  // silent=true  -> store the view and apply it once on the next animation frame (used by
+  //                 touch gestures, which can fire several times per frame)
+  // silent=false -> apply immediately (used by animations, which already run per frame)
+  function setView(S, v, silent) {
+    var b = S.base, L = viewLimits(S);
+    var sx = clamp(v.x1 - v.x0, L.minSx, L.maxSx), sy = clamp(v.y1 - v.y0, L.minSy, L.maxSy);
+    var x0 = clamp(v.x0, b.x0, b.x1 - sx), y0 = clamp(v.y0, b.y0, b.y1 - sy);
     S.view = { x0: x0, x1: x0 + sx, y0: y0, y1: y0 + sy };
+    if (silent) {
+      if (!S.viewDirty) {
+        S.viewDirty = true;
+        S.applyRaf = requestAnimationFrame(function () { S.viewDirty = false; if (!S.closed) applyView(S); });
+      }
+    } else {
+      applyView(S);
+    }
+  }
+  function applyView(S) {
     var o = S.chart.options.scales;
     o.x.min = S.view.x0; o.x.max = S.view.x1; o.y.min = S.view.y0; o.y.max = S.view.y1;
-    if (!silent) S.chart.update('none');
-    updateReadout(S);
+    S.chart.update('none');
+    var now = performance.now();
+    if (!S.lastReadout || now - S.lastReadout > 110) { S.lastReadout = now; updateReadout(S); }
     updateZoomLabel(S);
-  }
-  function zoomAt(S, f, px, py) {
-    var sx = S.chart.scales.x, sy = S.chart.scales.y, v = S.view;
-    var fx = sx.getValueForPixel(px), fy = sy.getValueForPixel(py);
-    if (!isFinite(fx)) fx = (v.x0 + v.x1) / 2;
-    if (!isFinite(fy)) fy = (v.y0 + v.y1) / 2;
-    setView(S, { x0: fx - (fx - v.x0) * f, x1: fx + (v.x1 - fx) * f, y0: fy - (fy - v.y0) * f, y1: fy + (v.y1 - fy) * f });
-  }
-  function panBy(S, dpx, dpy) {
-    var a = S.chart.chartArea, v = S.view;
-    var dx = -dpx * (v.x1 - v.x0) / a.width, dy = dpy * (v.y1 - v.y0) / a.height;
-    setView(S, { x0: v.x0 + dx, x1: v.x1 + dx, y0: v.y0 + dy, y1: v.y1 + dy });
   }
   function animateView(S, target) {
     cancelAnimationFrame(S.viewRaf);
@@ -393,22 +399,6 @@ window.ChartMax = (function () {
     }
     S.viewRaf = requestAnimationFrame(frame);
   }
-  function zoomCentered(S, f) {
-    var a = S.chart.chartArea;
-    animateView(S, (function () {
-      var v = S.view, cx = (v.x0 + v.x1) / 2, cy = (v.y0 + v.y1) / 2;
-      var hx = (v.x1 - v.x0) * f / 2, hy = (v.y1 - v.y0) * f / 2;
-      // let setView clamp via a dry-run
-      var tmp = { x0: cx - hx, x1: cx + hx, y0: cy - hy, y1: cy + hy };
-      var b = S.base;
-      var minSx = Math.min(b.x1 - b.x0, S.kind === 'scatter' ? (b.x1 - b.x0) * 0.03 : Math.max((b.x1 - b.x0) * 0.04, 2));
-      var sx = clamp(tmp.x1 - tmp.x0, minSx, b.x1 - b.x0), sy = clamp(tmp.y1 - tmp.y0, (b.y1 - b.y0) * 0.03, b.y1 - b.y0);
-      var x0 = clamp(cx - sx / 2, b.x0, b.x1 - sx), y0 = clamp(cy - sy / 2, b.y0, b.y1 - sy);
-      return { x0: x0, x1: x0 + sx, y0: y0, y1: y0 + sy };
-    })());
-    void a;
-  }
-
   /* ---------------- readout (visible-window stats) ---------------- */
   function updateZoomLabel(S) {
     var el = S.el.querySelector('.cm-zoom');
@@ -465,11 +455,6 @@ window.ChartMax = (function () {
       '<div class="cm-header">' +
         '<span class="cm-title">' + esc(title) + '</span>' +
         '<div class="cm-tools">' +
-          (isLine ? '<button type="button" class="cm-mode" aria-label="Single-finger drag mode" title="What a one-finger drag does">Stretch</button>' : '') +
-          '<button type="button" class="cm-btn" data-act="out" aria-label="Zoom out">' + ICON.minus + '</button>' +
-          '<span class="cm-zoom">Fit</span>' +
-          '<button type="button" class="cm-btn" data-act="in" aria-label="Zoom in">' + ICON.plus + '</button>' +
-          '<button type="button" class="cm-btn" data-act="reset" aria-label="Reset zoom">' + ICON.reset + '</button>' +
           '<button type="button" class="cm-btn cm-close" data-act="close" aria-label="Close">' + ICON.close + '</button>' +
         '</div>' +
       '</div>' +
@@ -496,20 +481,7 @@ window.ChartMax = (function () {
     setHint(S);
 
     el.addEventListener('click', function (e) {
-      var b = e.target.closest('[data-act]');
-      if (b) {
-        var act = b.getAttribute('data-act');
-        if (act === 'close') close();
-        else if (act === 'in') zoomCentered(S, 0.55);
-        else if (act === 'out') zoomCentered(S, 1 / 0.55);
-        else if (act === 'reset') animateView(S, S.base);
-        return;
-      }
-      if (e.target.closest('.cm-mode')) {
-        S.mode = S.mode === 'stretch' ? 'pan' : 'stretch';
-        e.target.closest('.cm-mode').textContent = S.mode === 'stretch' ? 'Stretch' : 'Pan';
-        setHint(S);
-      }
+      if (e.target.closest('[data-act="close"]')) close();
     });
 
     bindGestures(S);
@@ -522,23 +494,46 @@ window.ChartMax = (function () {
 
   function setHint(S) {
     var h = S.el.querySelector('.cm-hint');
-    var base = 'Pinch or scroll to zoom &middot; double-tap to reset &middot; tap a point for details';
-    if (S.kind === 'line') {
-      h.innerHTML = S.mode === 'stretch'
-        ? 'Drag the line to stretch it &mdash; let go and it snaps back &middot; two fingers to zoom / pan'
-        : 'Drag to pan &middot; ' + base;
-    } else {
-      h.innerHTML = 'Drag to pan &middot; ' + base;
-    }
+    h.innerHTML = S.kind === 'line'
+      ? 'Pinch to zoom &middot; drag to move &middot; pull the line to stretch it &middot; double-tap to reset'
+      : 'Pinch to zoom &middot; drag to move &middot; tap a point for details &middot; double-tap to reset';
   }
 
   function bindGestures(S) {
     var stage = S.el.querySelector('.cm-stage');
     var cv = S.canvas;
     cv.style.touchAction = 'none';
+    var STRETCH_HIT = 26;   // px from the line that counts as "grabbing the line"
 
     function pos(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
-    function inArea(p) { var a = S.chart.chartArea; return p.x >= a.left - 24 && p.x <= a.right + 24 && p.y >= a.top - 24 && p.y <= a.bottom + 24; }
+    // pixel -> data value for a given view (own maths, independent of Chart.js internals)
+    function toData(v, a, p) {
+      return { x: v.x0 + (p.x - a.left) / a.width * (v.x1 - v.x0), y: v.y1 - (p.y - a.top) / a.height * (v.y1 - v.y0) };
+    }
+    function metrics() {
+      var a = S.chart.chartArea, pts = Array.from(S.pointers.values()), m, d = 0;
+      if (pts.length >= 2) {
+        m = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+        d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      } else { m = pts[0] || { x: 0, y: 0 }; }
+      return { a: a, mid: m, dist: d };
+    }
+    // Remember where the view started and which data point sits under the fingers; every
+    // move then recomputes the view from that snapshot, so it never drifts or lags.
+    function snapshot(g) {
+      var m = metrics();
+      g.v0 = { x0: S.view.x0, x1: S.view.x1, y0: S.view.y0, y1: S.view.y1 };
+      g.dist0 = Math.max(24, m.dist);
+      g.anchor = toData(g.v0, m.a, m.mid);
+    }
+    function applyGesture(g) {
+      var m = metrics(), a = m.a, L = viewLimits(S);
+      var f = S.pointers.size >= 2 ? clamp(g.dist0 / Math.max(24, m.dist), 0.02, 50) : 1;
+      var sx = clamp((g.v0.x1 - g.v0.x0) * f, L.minSx, L.maxSx), sy = clamp((g.v0.y1 - g.v0.y0) * f, L.minSy, L.maxSy);
+      var x0 = g.anchor.x - (m.mid.x - a.left) / a.width * sx;
+      var y1 = g.anchor.y + (m.mid.y - a.top) / a.height * sy;
+      setView(S, { x0: x0, x1: x0 + sx, y0: y1 - sy, y1: y1 }, true);
+    }
 
     // While a gesture is running, keep Chart.js from fighting us with tooltips.
     stage.addEventListener('pointermove', function (e) { if (S.gesture && S.gesture.moved) e.stopPropagation(); }, true);
@@ -547,32 +542,25 @@ window.ChartMax = (function () {
       if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 1) return;
       var p = pos(e);
       S.pointers.set(e.pointerId, p);
-      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointermove', onMove, true);
       window.addEventListener('pointerup', onUp);
       window.addEventListener('pointercancel', onUp);
-      var g = S.gesture || (S.gesture = { moved: false, startedAt: Date.now(), startPos: p, type: null });
+      var g = S.gesture || (S.gesture = { moved: false, type: null, startPos: p, last: p });
       if (S.pointers.size >= 2) {
-        // second finger: switch to pinch, drop any stretch
-        endStretch(true);
-        var pts = Array.from(S.pointers.values());
-        g.type = 'pinch'; g.moved = true;
-        g.dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
-        g.mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+        // a second finger: let go of any stretch (it springs back) and switch to pinch
+        if (S.chart._cmStretch && S.chart._cmStretch.pinned) releaseSpring(S);
+        g.type = 'pinch'; g.moved = true; g.pendingStretch = null;
+        snapshot(g);
         return;
       }
-      g.type = null; g.moved = false; g.startPos = p; g.last = p;
-      var wantsStretch = S.kind === 'line' && S.mode === 'stretch' && !e.shiftKey && e.button !== 1;
-      if (wantsStretch && inArea(p)) {
+      g.type = null; g.moved = false; g.startPos = p; g.last = p; g.lastT = 0;
+      snapshot(g);
+      var wantsStretch = S.kind === 'line' && !e.shiftKey && e.button !== 1;
+      if (wantsStretch) {
         var hit = nearestLine(S.chart, p.x, p.y);
-        if (hit.dist < 44) { g.pendingStretch = { ds: hit.ds, ax: p.x, ay: p.y }; }
+        if (hit.dist < STRETCH_HIT) g.pendingStretch = { ds: hit.ds, ax: p.x, ay: p.y };
       }
     });
-
-    function endStretch(snap) {
-      var st = S.chart._cmStretch;
-      if (!st) return;
-      if (snap) { cancelAnimationFrame(st.raf); S.chart._cmStretch = null; S.chart.draw(); }
-    }
 
     function onMove(e) {
       var g = S.gesture;
@@ -580,46 +568,33 @@ window.ChartMax = (function () {
       var p = pos(e);
       S.pointers.set(e.pointerId, p);
 
-      if (g.type === 'pinch' && S.pointers.size >= 2) {
-        var pts = Array.from(S.pointers.values());
-        var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
-        var mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
-        zoomAt(S, g.dist / dist, mid.x, mid.y);
-        panBy(S, mid.x - g.mid.x, mid.y - g.mid.y);
-        g.dist = dist; g.mid = mid;
-        return;
-      }
-      if (S.pointers.size !== 1) return;
+      if (S.pointers.size >= 2) { applyGesture(g); return; }
 
       var dx = p.x - g.startPos.x, dy = p.y - g.startPos.y;
       if (!g.moved && Math.hypot(dx, dy) < 5) return;
       if (!g.moved) {
         g.moved = true;
-        // clear any tooltip left over from the initial touch
         S.chart.setActiveElements([]);
         if (S.chart.tooltip) S.chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+        var ns = null;
         if (g.pendingStretch) {
           var ps = g.pendingStretch;
           var old = S.chart._cmStretch; if (old) cancelAnimationFrame(old.raf);
-          var ns = buildStretch(S.chart, ps.ds, { x: ps.ax, y: ps.ay });
+          ns = buildStretch(S.chart, ps.ds, { x: ps.ax, y: ps.ay });
           S.chart._cmStretch = ns;
           if (ns) runStretch(S, ns);
-          g.type = ns ? 'stretch' : 'pan';
-          if (ns) cv.style.cursor = 'grabbing';
-        } else {
-          g.type = 'pan';
         }
+        if (ns) { g.type = 'stretch'; cv.style.cursor = 'grabbing'; }
+        else { g.type = 'pan'; snapshot(g); }
       }
       if (g.type === 'stretch') {
         var st = S.chart._cmStretch; if (!st) return;
-        // No cap: the grabbed point follows the finger exactly, the line stretches after it.
         var nowT = performance.now();
         if (g.lastT) { var dtm = Math.max(1, nowT - g.lastT) / 1000; st.fvx = (p.x - g.last.x) / dtm; st.fvy = (p.y - g.last.y) / dtm; }
         g.lastT = nowT; g.last = p;
         st.px = dx; st.py = dy;
       } else if (g.type === 'pan') {
-        panBy(S, p.x - g.last.x, p.y - g.last.y);
-        g.last = p;
+        applyGesture(g);
       }
     }
 
@@ -629,12 +604,13 @@ window.ChartMax = (function () {
       var p = pos(e);
       S.pointers.delete(e.pointerId);
       if (S.pointers.size === 0) {
-        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointermove', onMove, true);
         window.removeEventListener('pointerup', onUp);
         window.removeEventListener('pointercancel', onUp);
         cv.style.cursor = '';
         if (g && g.type === 'stretch') releaseSpring(S);
-        // double-tap → reset zoom
+        updateReadout(S);
+        // double-tap -> reset zoom
         if (g && !g.moved && e.type === 'pointerup') {
           var now = Date.now();
           if (S.lastTap && now - S.lastTap.t < 340 && Math.hypot(p.x - S.lastTap.x, p.y - S.lastTap.y) < 36) {
@@ -645,22 +621,25 @@ window.ChartMax = (function () {
           }
         }
         S.gesture = null;
-      } else if (g && g.type === 'pinch') {
-        // one finger lifted: continue as a pan from the remaining finger without a jump
-        var rest = Array.from(S.pointers.values())[0];
-        g.type = 'pan'; g.last = rest; g.startPos = rest; g.moved = true; g.pendingStretch = null;
+      } else if (g) {
+        // one finger lifted: carry on as a pan from the finger that remains, without a jump
+        g.type = 'pan'; g.moved = true; g.pendingStretch = null;
+        snapshot(g);
       }
     }
 
     stage.addEventListener('wheel', function (e) {
       e.preventDefault();
-      var p = pos(e);
+      var p = pos(e), a = S.chart.chartArea, v = S.view;
       var f = Math.exp(e.deltaY * (e.ctrlKey ? 0.012 : 0.0018));
-      zoomAt(S, f, p.x, p.y);
+      var an = toData(v, a, p), L = viewLimits(S);
+      var sx = clamp((v.x1 - v.x0) * f, L.minSx, L.maxSx), sy = clamp((v.y1 - v.y0) * f, L.minSy, L.maxSy);
+      var x0 = an.x - (p.x - a.left) / a.width * sx, y1 = an.y + (p.y - a.top) / a.height * sy;
+      setView(S, { x0: x0, x1: x0 + sx, y0: y1 - sy, y1: y1 }, true);
     }, { passive: false });
 
     S.cleanupGestures = function () {
-      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointermove', onMove, true);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
     };
@@ -671,7 +650,7 @@ window.ChartMax = (function () {
     if (!S) return;
     S.closed = true;
     cur = null;
-    cancelAnimationFrame(S.viewRaf);
+    cancelAnimationFrame(S.viewRaf); cancelAnimationFrame(S.applyRaf);
     var st = S.chart._cmStretch; if (st) cancelAnimationFrame(st.raf);
     if (S.cleanupGestures) S.cleanupGestures();
     document.removeEventListener('keydown', S.onKey);

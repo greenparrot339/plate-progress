@@ -1,4 +1,4 @@
-const CACHE_NAME = 'plate-progress-v39-chart-elastic';
+const CACHE_NAME = 'plate-progress-v40-chart-gestures';
 const APP_SHELL = [
   './', './index.html', './manifest.json', './exercise-database.js', './stats3d.js', './chart-max.js', './body.glb',
   './icon-192.png', './icon-512.png'
