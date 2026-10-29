@@ -173,46 +173,7 @@ window.ChartMax = (function () {
       : { mode: 'nearest', axis: 'x', intersect: false };
 
     var plugins = opt.plugins = opt.plugins || {};
-    plugins.tooltip = {
-      enabled: true,
-      events: [],            // never shown by hover/touch-move; the tap handler shows it on demand
-      padding: 12, cornerRadius: 10, displayColors: false,
-      backgroundColor: 'rgba(34,38,44,.96)', borderColor: COLORS.grid, borderWidth: 1,
-      titleColor: '#EDEAE3', bodyColor: '#EDEAE3', titleFont: { size: 13, weight: '600' }, bodyFont: { size: 12.5 },
-      callbacks: {
-        title: function (items) {
-          var it = items[0]; if (!it) return '';
-          if (L) return L[Math.round(it.parsed.x)] || '';
-          if (kind === 'scatter') { var g0 = groupOf[it.dataIndex]; if (g0) return fmtNum(g0.x) + (meta.xUnit || '') + '  ×  ' + fmtNum(g0.y) + ' reps'; }
-          return meta.title || '';
-        },
-        label: function (ctx) {
-          var ds = ctx.dataset, p = ctx.parsed;
-          if (kind === 'scatter') {
-            var g1 = groupOf[ctx.dataIndex];
-            return g1 ? g1.n + (g1.n > 1 ? ' sets at this weight & reps' : ' set') : '';
-          }
-          return (ds.label || 'Value') + ': ' + fmtNum(p.y) + (meta.yUnit || '');
-        },
-        afterLabel: function (ctx) {
-          if (kind === 'scatter') {
-            var g2 = groupOf[ctx.dataIndex];
-            if (!g2 || !g2.last) return '';
-            return g2.n > 1 && g2.first !== g2.last ? 'First ' + fmtDay(g2.first) + '  ·  last ' + fmtDay(g2.last) : 'Done ' + fmtDay(g2.last);
-          }
-          if (kind !== 'line') return '';
-          var data = ctx.dataset.data, i = ctx.dataIndex, out = [];
-          var prev = null;
-          for (var k = i - 1; k >= 0; k--) { if (data[k] && data[k].y != null) { prev = data[k].y; break; } }
-          var y = data[i] && data[i].y;
-          if (prev != null && y != null) {
-            var d = y - prev, pct = prev ? (d / Math.abs(prev)) * 100 : null;
-            out.push('Change vs previous: ' + (d >= 0 ? '+' : '') + fmtNum(d) + (pct == null ? '' : ' (' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%)'));
-          }
-          return out;
-        }
-      }
-    };
+    plugins.tooltip = { enabled: false };   // details are shown by our own tap tooltip (see showTip)
     plugins.legend = plugins.legend && plugins.legend.display ? plugins.legend : { display: false };
     cfg.plugins = [stretchPlugin];
     return { cfg: cfg, kind: kind, L: L, n: n, ranges: ranges, groups: groups, groupOf: groupOf };
@@ -244,6 +205,14 @@ window.ChartMax = (function () {
 
   var stretchPlugin = {
     id: 'cmStretch',
+    afterDatasetsDraw: function (chart) {
+      var S = chart._cmS;
+      if (!S || S.kind !== 'line' || !S.tipOn || !S.tipRef || (chart._cmStretch && chart._cmStretch.on)) return;
+      var pt = chart.getDatasetMeta(S.tipRef.di).data[S.tipRef.i]; if (!pt) return;
+      var ctx = chart.ctx; ctx.save();
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, 8, 0, Math.PI * 2); ctx.strokeStyle = '#EDEAE3'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
+    },
     beforeDatasetDraw: function (chart, args) {
       var S = chart._cmS;
       if (S && S.kind === 'scatter') { if (args.index === 0) drawScatter(chart, S); return false; }
@@ -655,8 +624,7 @@ window.ChartMax = (function () {
   function drawBars(chart, S) {
     var B = S.bars, ctx = chart.ctx, a = chart.chartArea, ds = chart.data.datasets[0];
     if (!B) return;
-    var act = []; try { act = chart.tooltip && chart.tooltip.getActiveElements ? chart.tooltip.getActiveElements() : []; } catch (e) { /* ignore */ }
-    var hot = {}; act.forEach(function (e) { hot[e.index] = 1; });
+    var hot = {}; if (S.tipOn && S.tipRef) hot[S.tipRef.i] = 1;
     ctx.save();
     ctx.beginPath(); ctx.rect(a.left, 0, a.width, chart.height); ctx.clip();
     for (var i = 0; i < B.n; i++) {
@@ -681,15 +649,53 @@ window.ChartMax = (function () {
     ctx.restore();
   }
 
-  /* ---------------- tooltip on tap only ---------------- */
+  /* ---------------- tooltip on tap only (own DOM element, no Chart.js tooltip) ---------------- */
+  function tipEl(S) {
+    if (!S.tipDom) {
+      S.tipDom = document.createElement('div');
+      S.tipDom.className = 'cm-tip';
+      S.el.querySelector('.cm-stage').appendChild(S.tipDom);
+    }
+    return S.tipDom;
+  }
   function clearTip(S) {
     if (!S.tipOn) return;
-    S.tipOn = false; S.tip = null;
-    try {
-      S.chart.setActiveElements([]);
-      if (S.chart.tooltip) S.chart.tooltip.setActiveElements([], { x: 0, y: 0 });
-      S.chart.update('none');
-    } catch (e) { /* ignore */ }
+    S.tipOn = false; S.tip = null; S.tipRef = null;
+    if (S.tipDom) S.tipDom.style.display = 'none';
+    try { S.chart.draw(); } catch (e) { /* ignore */ }
+  }
+  function tipHtml(S, best) {
+    var meta = S.meta || {}, unit = meta.yUnit || '', ds = S.chart.data.datasets[best.di], title = '', lines = [];
+    if (S.kind === 'scatter') {
+      var g = S.groups[best.gi];
+      title = fmtNum(g.x) + (meta.xUnit || '') + '  ×  ' + fmtNum(g.y) + ' reps';
+      lines.push(g.n + (g.n > 1 ? ' sets at this weight & reps' : ' set'));
+      if (g.last) lines.push(g.n > 1 && g.first !== g.last ? 'First ' + fmtDay(g.first) + '  ·  last ' + fmtDay(g.last) : 'Done ' + fmtDay(g.last));
+    } else {
+      var p = ds.data[best.i];
+      title = (S.L && S.L[best.i]) || meta.title || '';
+      lines.push((ds.label || 'Value') + ': ' + fmtNum(p.y) + unit);
+      if (S.kind === 'line') {
+        var prev = null;
+        for (var k = best.i - 1; k >= 0; k--) { if (validPt(ds.data[k])) { prev = ds.data[k].y; break; } }
+        if (prev != null) {
+          var d = p.y - prev, pct = prev ? (d / Math.abs(prev)) * 100 : null;
+          lines.push('Change vs previous: ' + fmtSigned(d) + (pct == null ? '' : ' (' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%)'));
+        }
+      }
+    }
+    return '<b>' + esc(title) + '</b>' + lines.map(function (l) { return '<div>' + esc(l) + '</div>'; }).join('');
+  }
+  function showTipFor(S, best) {
+    S.tipOn = true; S.tipRef = { di: best.di, i: best.i }; S.tip = best.gi != null ? best.gi : null;
+    var el = tipEl(S), stage = S.el.querySelector('.cm-stage');
+    el.innerHTML = tipHtml(S, best);
+    el.style.display = 'block';
+    var w = el.offsetWidth, h = el.offsetHeight, W = stage.clientWidth, H = stage.clientHeight;
+    var x = clamp(best.x - w / 2, 4, Math.max(4, W - w - 4));
+    var y = best.y - h - 14; if (y < 4) y = Math.min(H - h - 4, best.y + 16);
+    el.style.left = x + 'px'; el.style.top = Math.max(4, y) + 'px';
+    try { S.chart.draw(); } catch (e) { /* ignore */ }
   }
   function showTip(S, p) {
     var chart = S.chart, best = null, R = 30;
@@ -714,13 +720,7 @@ window.ChartMax = (function () {
       });
     }
     if (!best) { clearTip(S); return; }
-    S.tip = best.gi != null ? best.gi : null; S.tipOn = true;
-    try {
-      var els = [{ datasetIndex: best.di, index: best.i }];
-      chart.setActiveElements(els);
-      if (chart.tooltip) chart.tooltip.setActiveElements(els, { x: best.x, y: best.y });
-      chart.update('none');
-    } catch (e) { /* ignore */ }
+    showTipFor(S, best);
   }
 
   /* ---------------- shared animation loop for scatter + bars ---------------- */
@@ -799,10 +799,10 @@ window.ChartMax = (function () {
       return;
     }
     try {
-      var ch = S.chart, els = [{ datasetIndex: 0, index: r.i }], m = ch.getDatasetMeta(0).data[r.i];
-      ch.setActiveElements(els);
-      if (ch.tooltip) ch.tooltip.setActiveElements(els, { x: m.x, y: m.y });
-      S.tipOn = true; ch.update('none');
+      var best = null;
+      if (S.kind === 'bar') { var g = barGeom(S.chart, r.i); if (g) best = { di: 0, i: r.i, x: g.x, y: g.top }; }
+      else { var m = S.chart.getDatasetMeta(0).data[r.i]; if (m) best = { di: 0, i: r.i, x: m.x, y: m.y }; }
+      if (best) showTipFor(S, best);
     } catch (e) { /* ignore */ }
   }
 
@@ -855,7 +855,18 @@ window.ChartMax = (function () {
   }
 
   /* ---------------- open / close ---------------- */
+  // Never leave a dead full-screen overlay behind: if anything throws while opening, undo it.
   function open(canvas) {
+    try { openImpl(canvas); }
+    catch (err) {
+      console.error('Chart maximize failed', err);
+      try { if (cur) { cur.closed = true; if (cur.cleanupGestures) cur.cleanupGestures(); document.removeEventListener('keydown', cur.onKey); window.removeEventListener('resize', cur.onResize); try { cur.chart.destroy(); } catch (e2) { /* ignore */ } } } catch (e3) { /* ignore */ }
+      cur = null;
+      var ov = document.getElementById('chart-max-overlay'); if (ov) ov.remove();
+      document.body.style.overflow = '';
+    }
+  }
+  function openImpl(canvas) {
     if (cur) return;
     var reg = registry.get(canvas);
     if (!reg || typeof Chart === 'undefined') return;
@@ -886,12 +897,13 @@ window.ChartMax = (function () {
       '</div>';
     document.body.appendChild(el);
     document.body.style.overflow = 'hidden';
+    el.addEventListener('click', function (e) { if (e.target.closest('[data-act="close"]')) close(); });
 
     var cv = el.querySelector('canvas');
     var S = cur = {
       el: el, canvas: cv, chart: null, kind: prep.kind, closed: false, mode: isLine ? 'stretch' : 'pan',
       base: null, view: null, pointers: new Map(), gesture: null, lastTap: null, viewRaf: 0,
-      groups: prep.groups, sel: null, mag: null, lasso: null, bars: null, tableRows: null, panelOpen: true
+      L: prep.L, meta: meta, groups: prep.groups, sel: null, mag: null, lasso: null, bars: null, tableRows: null, panelOpen: true
     };
     var panel = el.querySelector('.cm-panel');
     panel.style.height = panelOpenH() + 'px';
@@ -913,10 +925,6 @@ window.ChartMax = (function () {
     el.querySelector('.cm-table-wrap').innerHTML = buildTable(S, prep, meta);
     bindPanel(S);
     updateReadout(S);
-
-    el.addEventListener('click', function (e) {
-      if (e.target.closest('[data-act="close"]')) close();
-    });
 
     bindGestures(S);
     S.onKey = function (e) { if (e.key === 'Escape') close(); };

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'plate-progress-v42-chart-tap-tooltip';
+const CACHE_NAME = 'plate-progress-v43-chart-safe-open';
 const APP_SHELL = [
   './', './index.html', './manifest.json', './exercise-database.js', './stats3d.js', './chart-max.js', './body.glb',
   './icon-192.png', './icon-512.png'
