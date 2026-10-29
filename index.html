@@ -429,7 +429,22 @@
   .cm-chip b{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--text);}
   .cm-stage{flex:1;min-height:0;position:relative;margin:0 8px;touch-action:none;}
   .cm-stage canvas{width:100%!important;height:100%!important;touch-action:none;}
-  .cm-hint{padding:8px 14px 12px;font-size:11.5px;color:var(--text-faint);text-align:center;}
+  .cm-panel{flex:none;display:flex;flex-direction:column;overflow:hidden;background:var(--surface);border-top:1px solid var(--border);
+    border-radius:16px 16px 0 0;transition:height .26s cubic-bezier(.2,.8,.2,1);padding-bottom:env(safe-area-inset-bottom);}
+  .cm-panel.drag{transition:none;}
+  .cm-handle{flex:none;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;touch-action:none;cursor:grab;}
+  .cm-grip{width:44px;height:5px;border-radius:3px;background:var(--text-faint);}
+  .cm-handle-text{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);}
+  .cm-hint{flex:none;padding:0 14px 8px;font-size:11px;color:var(--text-faint);text-align:center;line-height:1.4;}
+  .cm-table-wrap{flex:1;min-height:0;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;padding:0 10px 14px;}
+  .cm-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .cm-table th{position:sticky;top:0;background:var(--surface);text-align:left;font-family:var(--font-display);font-weight:500;font-size:10.5px;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:7px 8px;border-bottom:1px solid var(--border);}
+  .cm-table td{padding:8px;border-bottom:1px solid rgba(46,51,58,.55);font-family:var(--font-mono);color:var(--text);white-space:nowrap;}
+  .cm-table td:first-child{color:var(--text-dim);}
+  .cm-table tr.dim td{opacity:.3;}
+  .cm-table tr.sel td{background:var(--accent-dim);color:var(--accent);}
+  .cm-table tbody tr:active td{background:var(--surface2);}
   /* ===== Rest day ===== */
   .rest-day-panel{position:relative;text-align:center;padding:26px 18px 30px;border:1px solid var(--border);border-radius:var(--radius);
     background:radial-gradient(120% 90% at 50% 0%, rgba(232,179,44,.07), transparent 60%), var(--surface);overflow:hidden;}
@@ -3652,7 +3667,7 @@ function renderProgressExerciseMode(){
   maxifyChart(charts.line, {title:'Progress — '+metricLabel, yName:metricLabel, yUnit: state.progressMetric==='reps'?'':' kg'});
   charts.scatter = new Chart(document.getElementById('chart-scatter'), {
     type:'scatter',
-    data:{ datasets:[{ label:'Sets', data: sets.map(s=>({x:s.weight,y:s.reps})), backgroundColor:'#C1543A', borderColor:'#C1543A',
+    data:{ datasets:[{ label:'Sets', data: sets.map(s=>({x:s.weight,y:s.reps,d:s.date})), backgroundColor:'#C1543A', borderColor:'#C1543A',
       pointRadius:5, pointHoverRadius:6 }]},
     options:{ responsive:true, maintainAspectRatio:false, layout:{padding:12},
       plugins:{ legend:{display:false} },
@@ -3672,7 +3687,7 @@ function renderProgressExerciseMode(){
         scales:{ x:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{display:false} },
                  y:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'}, beginAtZero:true } } }
     });
-    maxifyChart(charts.bar, {title:'Average reps by weight used', yName:'Avg reps', yUnit:''});
+    maxifyChart(charts.bar, {title:'Average reps by weight used', xName:'Weight', yName:'Avg reps', yUnit:'', counts: weightKeys.map(w=>byWeight[w].length)});
   }
 }
 

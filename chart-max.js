@@ -72,6 +72,47 @@ window.ChartMax = (function () {
     wrap.addEventListener('pointercancel', function () { down = null; });
   }
 
+  /* ---------------- small helpers ---------------- */
+  function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* ignore */ } }
+  function dayNum(d) { var t = Date.parse(d + 'T00:00:00'); return isFinite(t) ? t / 864e5 : NaN; }
+  function fmtDay(d) {
+    var t = Date.parse(d + 'T00:00:00');
+    if (!isFinite(t)) return d || '—';
+    try { return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); } catch (e) { return d; }
+  }
+  function validPt(p) { return p && isFinite(p.x) && isFinite(p.y) && p.x != null && p.y != null; }
+  function dataRange(data) {
+    var xs = [], ys = [];
+    data.forEach(function (p) { if (validPt(p)) { xs.push(p.x); ys.push(p.y); } });
+    if (!xs.length) return { x0: 0, x1: 1, y0: 0, y1: 1 };
+    var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs), maxY = Math.max.apply(null, ys);
+    var padX = (maxX - minX) * 0.08 || Math.max(2.5, Math.abs(maxX) * 0.1);
+    var x0 = minX - padX; if (minX >= 0) x0 = Math.max(0, x0);
+    return { x0: x0, x1: maxX + padX, y0: 0, y1: maxY + Math.max(1, maxY * 0.12) };
+  }
+  // Sets with identical weight & reps share one bubble.
+  function buildGroups(data) {
+    var map = {}, list = [];
+    data.forEach(function (p, i) {
+      if (!validPt(p)) return;
+      var k = p.x + '|' + p.y, g = map[k];
+      if (!g) { g = map[k] = { gi: list.length, x: p.x, y: p.y, n: 0, first: p.d || '', last: p.d || '', idxs: [], ux: 0, uy: 0, vx: 0, vy: 0, t: 1 }; list.push(g); }
+      g.n++; g.idxs.push(i);
+      if (p.d) { if (!g.last || p.d > g.last) g.last = p.d; if (!g.first || p.d < g.first) g.first = p.d; }
+    });
+    var lo = Infinity, hi = -Infinity;
+    list.forEach(function (g) { var d = dayNum(g.last); if (isFinite(d)) { lo = Math.min(lo, d); hi = Math.max(hi, d); } });
+    list.forEach(function (g) { var d = dayNum(g.last); g.t = (isFinite(d) && hi > lo) ? (d - lo) / (hi - lo) : 1; });
+    return list;
+  }
+  var RC = { a: [77, 94, 120], b: [193, 84, 58], c: [232, 179, 44] };
+  function recencyColor(t, alpha) {
+    var A, B, u;
+    if (t < 0.5) { A = RC.a; B = RC.b; u = t / 0.5; } else { A = RC.b; B = RC.c; u = (t - 0.5) / 0.5; }
+    function m(i) { return Math.round(A[i] + (B[i] - A[i]) * u); }
+    return 'rgba(' + m(0) + ',' + m(1) + ',' + m(2) + ',' + (alpha == null ? 1 : alpha) + ')';
+  }
+
   /* ---------------- config preparation for the full-screen chart ---------------- */
   function prepare(json, meta) {
     var cfg = JSON.parse(json);
@@ -92,7 +133,7 @@ window.ChartMax = (function () {
     scales.y.ticks.font = { size: 11.5 };
     scales.y.afterFit = function (sc) { sc.width = kind === 'scatter' ? 58 : 46; };
 
-    var n = 0;
+    var n = 0, ranges = null, groups = null, groupOf = [];
     if (L) {
       // Category chart → linear x axis so it can be zoomed/panned smoothly.
       n = L.length;
@@ -117,7 +158,14 @@ window.ChartMax = (function () {
         scale.ticks = t;
       };
     } else if (kind === 'scatter') {
-      cfg.data.datasets.forEach(function (ds) { ds.pointHitRadius = 16; ds.pointRadius = 6; ds.pointHoverRadius = 9; });
+      cfg.data.datasets.forEach(function (ds) { ds.pointHitRadius = 18; ds.pointRadius = 6; ds.pointHoverRadius = 9; });
+      // Explicit axis ranges: never depend on Chart.js auto-scaling at open time.
+      var rg = dataRange(cfg.data.datasets[0].data);
+      scales.x.min = rg.x0; scales.x.max = rg.x1; scales.y.min = rg.y0; scales.y.max = rg.y1;
+      scales.x.type = 'linear'; scales.y.type = 'linear';
+      ranges = rg;
+      groups = buildGroups(cfg.data.datasets[0].data);
+      groups.forEach(function (g) { g.idxs.forEach(function (i) { groupOf[i] = g; }); });
     }
 
     opt.interaction = (kind === 'scatter')
@@ -127,6 +175,7 @@ window.ChartMax = (function () {
     var plugins = opt.plugins = opt.plugins || {};
     plugins.tooltip = {
       enabled: true,
+      events: [],            // never shown by hover/touch-move; the tap handler shows it on demand
       padding: 12, cornerRadius: 10, displayColors: false,
       backgroundColor: 'rgba(34,38,44,.96)', borderColor: COLORS.grid, borderWidth: 1,
       titleColor: '#EDEAE3', bodyColor: '#EDEAE3', titleFont: { size: 13, weight: '600' }, bodyFont: { size: 12.5 },
@@ -134,16 +183,23 @@ window.ChartMax = (function () {
         title: function (items) {
           var it = items[0]; if (!it) return '';
           if (L) return L[Math.round(it.parsed.x)] || '';
+          if (kind === 'scatter') { var g0 = groupOf[it.dataIndex]; if (g0) return fmtNum(g0.x) + (meta.xUnit || '') + '  ×  ' + fmtNum(g0.y) + ' reps'; }
           return meta.title || '';
         },
         label: function (ctx) {
           var ds = ctx.dataset, p = ctx.parsed;
           if (kind === 'scatter') {
-            return (meta.xName || 'x') + ': ' + fmtNum(p.x) + (meta.xUnit || '') + '   ·   ' + (meta.yName || 'y') + ': ' + fmtNum(p.y) + (meta.yUnit || '');
+            var g1 = groupOf[ctx.dataIndex];
+            return g1 ? g1.n + (g1.n > 1 ? ' sets at this weight & reps' : ' set') : '';
           }
           return (ds.label || 'Value') + ': ' + fmtNum(p.y) + (meta.yUnit || '');
         },
         afterLabel: function (ctx) {
+          if (kind === 'scatter') {
+            var g2 = groupOf[ctx.dataIndex];
+            if (!g2 || !g2.last) return '';
+            return g2.n > 1 && g2.first !== g2.last ? 'First ' + fmtDay(g2.first) + '  ·  last ' + fmtDay(g2.last) : 'Done ' + fmtDay(g2.last);
+          }
           if (kind !== 'line') return '';
           var data = ctx.dataset.data, i = ctx.dataIndex, out = [];
           var prev = null;
@@ -159,7 +215,7 @@ window.ChartMax = (function () {
     };
     plugins.legend = plugins.legend && plugins.legend.display ? plugins.legend : { display: false };
     cfg.plugins = [stretchPlugin];
-    return { cfg: cfg, kind: kind, L: L, n: n };
+    return { cfg: cfg, kind: kind, L: L, n: n, ranges: ranges, groups: groups, groupOf: groupOf };
   }
 
   /* ---------------- rubber-band stretch (line charts) ---------------- */
@@ -189,6 +245,9 @@ window.ChartMax = (function () {
   var stretchPlugin = {
     id: 'cmStretch',
     beforeDatasetDraw: function (chart, args) {
+      var S = chart._cmS;
+      if (S && S.kind === 'scatter') { if (args.index === 0) drawScatter(chart, S); return false; }
+      if (S && S.kind === 'bar') { if (args.index === 0) drawBars(chart, S); return false; }
       var st = chart._cmStretch;
       if (!st || !st.on || args.index !== st.ds) return;
       drawStretched(chart, args.index, st);
@@ -237,7 +296,7 @@ window.ChartMax = (function () {
       on: true, ds: di, n: n, h: h, g: g, rx: rx, ry: ry, dataNode: dataNode, pts: pts.length,
       ux: new Float32Array(n), uy: new Float32Array(n), vx: new Float32Array(n), vy: new Float32Array(n),
       ax: new Float32Array(n), ay: new Float32Array(n),
-      kn: kn, kr: kr, cd: 2 * 0.11 * w1, cv: 0.04 * c / h, dt: 0.4 * h / c,
+      kn: kn, kr: kr, cd: 2 * 0.17 * w1, cd0: 2 * 0.17 * w1, relT: 0, cv: 0.04 * c / h, dt: 0.4 * h / c,
       pinned: true, px: 0, py: 0, fvx: 0, fvy: 0, raf: 0, last: 0, chart: chart
     };
   }
@@ -271,9 +330,16 @@ window.ChartMax = (function () {
     function frame(now) {
       if (S.closed || S.chart._cmStretch !== st) return;
       var dt = Math.min(0.033, Math.max(0.001, (now - st.last) / 1000)); st.last = now;
+      var over = false;
+      if (!st.pinned) {
+        if (!st.relT) st.relT = now;
+        var age = (now - st.relT) / 1000;
+        st.cd = st.cd0 * (1 + Math.max(0, age - 0.45) * 7);   // wobble first, then settle quickly
+        over = age > 1.4;
+      }
       stepStretch(st, dt);
       S.chart.draw();
-      if (!st.pinned && stretchEnergy(st) < 0.12) {
+      if (!st.pinned && (over || stretchEnergy(st) < 0.35)) {
         st.on = false; S.chart._cmStretch = null; S.chart.draw(); return;
       }
       st.raf = requestAnimationFrame(frame);
@@ -363,7 +429,12 @@ window.ChartMax = (function () {
   // silent=true  -> store the view and apply it once on the next animation frame (used by
   //                 touch gestures, which can fire several times per frame)
   // silent=false -> apply immediately (used by animations, which already run per frame)
+  function killStretch(S) {
+    var st = S.chart && S.chart._cmStretch;
+    if (st) { cancelAnimationFrame(st.raf); S.chart._cmStretch = null; }
+  }
   function setView(S, v, silent) {
+    killStretch(S);   // a stretched line is drawn in old screen coordinates, so any zoom/pan ends it at once
     var b = S.base, L = viewLimits(S);
     var sx = clamp(v.x1 - v.x0, L.minSx, L.maxSx), sy = clamp(v.y1 - v.y0, L.minSy, L.maxSy);
     var x0 = clamp(v.x0, b.x0, b.x1 - sx), y0 = clamp(v.y0, b.y0, b.y1 - sy);
@@ -411,28 +482,376 @@ window.ChartMax = (function () {
     if (!box) return;
     var v = S.view, ds = S.chart.data.datasets[0];
     if (!ds) { box.innerHTML = ''; return; }
-    var inView = ds.data.filter(function (p) { return p && p.y != null && p.x >= v.x0 - 1e-9 && p.x <= v.x1 + 1e-9 && p.y >= v.y0 - 1e-9 && p.y <= v.y1 + 1e-9; });
-    var ys = inView.map(function (p) { return p.y; });
-    var total = ds.data.filter(function (p) { return p && p.y != null; }).length;
     var chips = [];
     function chip(label, val) { chips.push('<div class="cm-chip"><span>' + esc(label) + '</span><b>' + esc(val) + '</b></div>'); }
+    var avg = function (arr) { return arr.length ? arr.reduce(function (p, q) { return p + q; }, 0) / arr.length : null; };
     if (S.kind === 'scatter') {
-      var xs = inView.map(function (p) { return p.x; });
-      chip('Sets shown', inView.length + ' / ' + total);
+      var sel = S.sel && S.sel.size;
+      var gs = S.groups.filter(function (g) { return sel ? S.sel.has(g.gi) : (g.x >= v.x0 - 1e-9 && g.x <= v.x1 + 1e-9 && g.y >= v.y0 - 1e-9 && g.y <= v.y1 + 1e-9); });
+      var total = S.groups.reduce(function (p, g) { return p + g.n; }, 0);
+      var cntSets = gs.reduce(function (p, g) { return p + g.n; }, 0);
+      var xs = gs.map(function (g) { return g.x; });
+      chip(sel ? 'Lassoed sets' : 'Sets shown', cntSets + ' / ' + total);
       chip('Weight', xs.length ? fmtNum(Math.min.apply(null, xs)) + '–' + fmtNum(Math.max.apply(null, xs)) + ' kg' : '—');
-      chip('Max reps', ys.length ? fmtNum(Math.max.apply(null, ys)) : '—');
-      chip('Avg reps', ys.length ? fmtNum(ys.reduce(function (a, b) { return a + b; }, 0) / ys.length) : '—');
+      chip('Max reps', gs.length ? fmtNum(Math.max.apply(null, gs.map(function (g) { return g.y; }))) : '—');
+      var wsum = gs.reduce(function (p, g) { return p + g.y * g.n; }, 0);
+      chip('Avg reps', cntSets ? fmtNum(wsum / cntSets) : '—');
     } else {
-      chip('Points shown', inView.length + ' / ' + total);
+      var inView = ds.data.filter(function (p) { return validPt(p) && p.x >= v.x0 - 1e-9 && p.x <= v.x1 + 1e-9 && p.y >= v.y0 - 1e-9 && p.y <= v.y1 + 1e-9; });
+      var ys = inView.map(function (p) { return p.y; });
+      var tot = ds.data.filter(validPt).length, av = avg(ys);
+      chip('Points shown', inView.length + ' / ' + tot);
       chip('Min', ys.length ? fmtNum(Math.min.apply(null, ys)) : '—');
       chip('Max', ys.length ? fmtNum(Math.max.apply(null, ys)) : '—');
-      chip('Avg', ys.length ? fmtNum(ys.reduce(function (a, b) { return a + b; }, 0) / ys.length) : '—');
-      if (S.kind === 'line' && ys.length > 1) {
-        var d = ys[ys.length - 1] - ys[0];
-        chip('First → last', (d >= 0 ? '+' : '') + fmtNum(d));
-      }
+      chip('Avg', av == null ? '—' : fmtNum(av));
+      if (S.kind === 'line' && ys.length > 1) { var d = ys[ys.length - 1] - ys[0]; chip('First → last', (d >= 0 ? '+' : '') + fmtNum(d)); }
     }
     box.innerHTML = chips.join('');
+    updateTable(S);
+  }
+
+  /* ---------------- scatter: bubbles, magnet finger, lasso ---------------- */
+  function groupPx(chart, g) {
+    var a = chart.chartArea, sx = chart.scales.x, sy = chart.scales.y;
+    return { x: a.left + (g.x - sx.min) / (sx.max - sx.min) * a.width, y: a.bottom - (g.y - sy.min) / (sy.max - sy.min) * a.height };
+  }
+  function bubbleR(g) { return 5 + Math.min(11, 3.4 * Math.sqrt(g.n - 1)); }
+
+  function drawScatter(chart, S) {
+    var ctx = chart.ctx, a = chart.chartArea, groups = S.groups || [];
+    ctx.save();
+    ctx.beginPath(); ctx.rect(a.left - 12, a.top - 12, a.width + 24, a.height + 24); ctx.clip();
+    var hasSel = S.sel && S.sel.size > 0;
+    var order = groups.slice().sort(function (p, q) { return q.n - p.n; });   // big bubbles underneath
+    order.forEach(function (g) {
+      var b = groupPx(chart, g), x = b.x + g.ux, y = b.y + g.uy, r = bubbleR(g);
+      var on = !hasSel || S.sel.has(g.gi);
+      ctx.globalAlpha = on ? 1 : 0.2;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = recencyColor(g.t, 0.88); ctx.fill();
+      ctx.lineWidth = (hasSel && on) || S.tip === g.gi ? 2.5 : 1.5;
+      ctx.strokeStyle = (hasSel && on) || S.tip === g.gi ? '#EDEAE3' : COLORS.surface; ctx.stroke();
+      if (g.n > 1 && r >= 9) {
+        ctx.fillStyle = '#14161A'; ctx.font = '600 10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(String(g.n), x, y + 0.5);
+      }
+    });
+    ctx.globalAlpha = 1;
+    // magnet field
+    var m = S.mag;
+    if (m && m.on) {
+      ctx.beginPath(); ctx.arc(m.x, m.y, MAGNET_R, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(232,179,44,.06)'; ctx.fill();
+      ctx.setLineDash([3, 5]); ctx.strokeStyle = 'rgba(232,179,44,.45)'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(m.x, m.y, 7, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(237,234,227,.7)'; ctx.lineWidth = 2; ctx.stroke();
+    }
+    // lasso loop
+    var l = S.lasso;
+    if (l && l.pts.length > 1) {
+      ctx.beginPath();
+      l.pts.forEach(function (q, i) { i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); });
+      if (!l.active) ctx.closePath();
+      ctx.fillStyle = 'rgba(232,179,44,.10)'; ctx.fill();
+      ctx.setLineDash([6, 5]); ctx.strokeStyle = '#E8B32C'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.restore();
+    // legend: colour = recency, size = number of sets
+    ctx.save();
+    var lx = a.right - 78, ly = a.top + 10;
+    var grd = ctx.createLinearGradient(lx, 0, lx + 64, 0);
+    grd.addColorStop(0, recencyColor(0, 1)); grd.addColorStop(0.5, recencyColor(0.5, 1)); grd.addColorStop(1, recencyColor(1, 1));
+    ctx.fillStyle = 'rgba(14,16,19,.7)'; ctx.fillRect(lx - 8, ly - 6, 80, 40);
+    ctx.fillStyle = grd; ctx.fillRect(lx, ly, 64, 6);
+    ctx.fillStyle = '#9A9FA6'; ctx.font = '9.5px Inter, sans-serif'; ctx.textBaseline = 'top';
+    ctx.textAlign = 'left'; ctx.fillText('older', lx, ly + 9); ctx.textAlign = 'right'; ctx.fillText('newer', lx + 64, ly + 9);
+    ctx.textAlign = 'left'; ctx.fillText('bigger = more sets', lx - 4, ly + 21);
+    ctx.restore();
+  }
+
+  var MAGNET_R = 96;
+  function stepScatter(S, dt) {
+    var chart = S.chart, m = S.mag, moving = false;
+    var K = 240, C = 11;       // springs: ζ ≈ 0.36 → a lively but quick bounce back
+    var n = Math.max(1, Math.ceil(dt / 0.004)), h = dt / n;
+    var base = S.groups.map(function (g) { return groupPx(chart, g); });
+    for (var k = 0; k < n; k++) {
+      S.groups.forEach(function (g, i) {
+        var tx = 0, ty = 0;
+        if (m && m.on) {
+          var dx = m.x - base[i].x, dy = m.y - base[i].y, d = Math.hypot(dx, dy);
+          if (d < MAGNET_R) { var w = (1 - d / MAGNET_R); w *= w; tx = dx * 0.8 * w; ty = dy * 0.8 * w; }
+        }
+        g.vx += (K * (tx - g.ux) - C * g.vx) * h; g.vy += (K * (ty - g.uy) - C * g.vy) * h;
+        g.ux += g.vx * h; g.uy += g.vy * h;
+      });
+    }
+    S.groups.forEach(function (g) { if (Math.abs(g.ux) + Math.abs(g.uy) > 0.25 || Math.abs(g.vx) + Math.abs(g.vy) > 3) moving = true; });
+    return moving || !!(m && m.on);
+  }
+  function nearestGroupDist(S, p) {
+    var best = Infinity;
+    S.groups.forEach(function (g) { var b = groupPx(S.chart, g); best = Math.min(best, Math.hypot(b.x - p.x, b.y - p.y)); });
+    return best;
+  }
+  function inPolygon(pt, poly) {
+    var inside = false;
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      var xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+      if (((yi > pt.y) !== (yj > pt.y)) && (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+  }
+  function finishLasso(S) {
+    var l = S.lasso; if (!l) return;
+    l.active = false;
+    var sel = new Set();
+    if (l.pts.length >= 3) S.groups.forEach(function (g) { if (inPolygon(groupPx(S.chart, g), l.pts)) sel.add(g.gi); });
+    S.sel = sel.size ? sel : null;
+    S.lasso = null;
+    if (S.sel) buzz(14);
+    S.chart.draw(); updateReadout(S); updateTable(S);
+  }
+
+  /* ---------------- bars: jelly + bounce-in ---------------- */
+  function barGeom(chart, i) {
+    var a = chart.chartArea, sx = chart.scales.x, sy = chart.scales.y, p = chart.data.datasets[0].data[i];
+    if (!validPt(p)) return null;
+    var ppu = a.width / (sx.max - sx.min), w = Math.min(90, ppu * 0.63);
+    var zero = a.bottom - (0 - sy.min) / (sy.max - sy.min) * a.height;
+    return { x: a.left + (p.x - sx.min) * ppu, w: w, top: a.bottom - (p.y - sy.min) / (sy.max - sy.min) * a.height, base: clamp(zero, a.top, a.bottom) };
+  }
+  function initBars(S) {
+    var n = S.chart.data.datasets[0].data.length;
+    S.bars = { n: n, dy: new Float32Array(n), vy: new Float32Array(n), lx: new Float32Array(n), vlx: new Float32Array(n),
+      hold: new Uint8Array(n).fill(1), fresh: new Uint8Array(n).fill(1), pin: -1, py: 0, px: 0, t0: performance.now() };
+  }
+  function stepBars(S, dt) {
+    var B = S.bars, chart = S.chart, n = B.n, moving = false, now = performance.now();
+    var tdy = new Float32Array(n), tlx = new Float32Array(n);
+    if (B.pin >= 0) {
+      [[0, 1, 0.4], [1, 0.4, 0.22], [-1, 0.4, 0.22], [2, 0.14, 0.1], [-2, 0.14, 0.1]].forEach(function (c) {
+        var j = B.pin + c[0]; if (j < 0 || j >= n) return;
+        tdy[j] = B.py * c[1]; tlx[j] = clamp(B.px * c[2], -40, 40);
+      });
+    }
+    var geo = []; for (var i = 0; i < n; i++) geo.push(barGeom(chart, i));
+    for (var i2 = 0; i2 < n; i2++) if (B.hold[i2] && now - B.t0 >= 200 + i2 * 75) B.hold[i2] = 0;
+    var steps = Math.max(1, Math.ceil(dt / 0.004)), h = dt / steps;
+    for (var k = 0; k < steps; k++) {
+      for (var j2 = 0; j2 < n; j2++) {
+        var g = geo[j2]; if (!g) continue;
+        if (B.hold[j2]) { B.dy[j2] = g.base - g.top - 3; B.vy[j2] = 0; continue; }
+        var K = B.fresh[j2] ? 190 : 300, C = B.fresh[j2] ? 13 : 10;   // intro is a softer bounce, jelly a livelier one
+        B.vy[j2] += (K * (tdy[j2] - B.dy[j2]) - C * B.vy[j2]) * h; B.dy[j2] += B.vy[j2] * h;
+        B.vlx[j2] += (300 * (tlx[j2] - B.lx[j2]) - 10 * B.vlx[j2]) * h; B.lx[j2] += B.vlx[j2] * h;
+      }
+    }
+    for (var q = 0; q < n; q++) {
+      if (B.hold[q] || Math.abs(B.dy[q]) > 0.3 || Math.abs(B.vy[q]) > 4 || Math.abs(B.lx[q]) > 0.3 || Math.abs(B.vlx[q]) > 4) moving = true;
+      else B.fresh[q] = 0;
+    }
+    return moving || B.pin >= 0;
+  }
+  function drawBars(chart, S) {
+    var B = S.bars, ctx = chart.ctx, a = chart.chartArea, ds = chart.data.datasets[0];
+    if (!B) return;
+    var act = []; try { act = chart.tooltip && chart.tooltip.getActiveElements ? chart.tooltip.getActiveElements() : []; } catch (e) { /* ignore */ }
+    var hot = {}; act.forEach(function (e) { hot[e.index] = 1; });
+    ctx.save();
+    ctx.beginPath(); ctx.rect(a.left, 0, a.width, chart.height); ctx.clip();
+    for (var i = 0; i < B.n; i++) {
+      var g = barGeom(chart, i); if (!g) continue;
+      var top = Math.min(g.top + B.dy[i], g.base - 3), lx = B.lx[i];
+      var h0 = Math.max(3, g.base - g.top), h1 = Math.max(3, g.base - top);
+      var ws = clamp(Math.sqrt(h0 / h1), 0.55, 1.6), tw = g.w * ws;
+      var xlb = g.x - g.w / 2, xrb = g.x + g.w / 2, xlt = g.x + lx - tw / 2, xrt = g.x + lx + tw / 2;
+      var inward = (g.w - tw) * 0.28, my = (g.base + top) / 2, r = Math.min(6, tw / 2, h1 / 2);
+      ctx.beginPath();
+      ctx.moveTo(xlb, g.base);
+      ctx.quadraticCurveTo((xlb + xlt) / 2 + inward, my, xlt, top + r);
+      ctx.quadraticCurveTo(xlt, top, xlt + r, top);
+      ctx.lineTo(xrt - r, top);
+      ctx.quadraticCurveTo(xrt, top, xrt, top + r);
+      ctx.quadraticCurveTo((xrb + xrt) / 2 - inward, my, xrb, g.base);
+      ctx.closePath();
+      var col = ds.backgroundColor; if (Array.isArray(col)) col = col[i] || col[0];
+      ctx.fillStyle = (hot[i] || B.pin === i) ? '#8BD197' : (col || '#6FA97B');
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /* ---------------- tooltip on tap only ---------------- */
+  function clearTip(S) {
+    if (!S.tipOn) return;
+    S.tipOn = false; S.tip = null;
+    try {
+      S.chart.setActiveElements([]);
+      if (S.chart.tooltip) S.chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+      S.chart.update('none');
+    } catch (e) { /* ignore */ }
+  }
+  function showTip(S, p) {
+    var chart = S.chart, best = null, R = 30;
+    if (S.kind === 'scatter') {
+      S.groups.forEach(function (g) {
+        var b = groupPx(chart, g), d = Math.hypot(b.x - p.x, b.y - p.y);
+        if (d < Math.max(R, bubbleR(g) + 8) && (!best || d < best.d)) best = { d: d, di: 0, i: g.idxs[0], x: b.x, y: b.y, gi: g.gi };
+      });
+    } else if (S.kind === 'bar') {
+      for (var i = 0; i < S.bars.n; i++) {
+        var g = barGeom(chart, i); if (!g) continue;
+        if (Math.abs(p.x - g.x) <= g.w / 2 + 6 && p.y >= g.top - 14 && p.y <= g.base + 4) { best = { d: 0, di: 0, i: i, x: g.x, y: g.top }; break; }
+      }
+    } else {
+      chart.data.datasets.forEach(function (ds, di) {
+        var m = chart.getDatasetMeta(di); if (m.hidden) return;
+        m.data.forEach(function (pt, i) {
+          if (!pt || pt.skip || !isFinite(pt.x) || !isFinite(pt.y)) return;
+          var d = Math.hypot(pt.x - p.x, pt.y - p.y);
+          if (d < R && (!best || d < best.d)) best = { d: d, di: di, i: i, x: pt.x, y: pt.y };
+        });
+      });
+    }
+    if (!best) { clearTip(S); return; }
+    S.tip = best.gi != null ? best.gi : null; S.tipOn = true;
+    try {
+      var els = [{ datasetIndex: best.di, index: best.i }];
+      chart.setActiveElements(els);
+      if (chart.tooltip) chart.tooltip.setActiveElements(els, { x: best.x, y: best.y });
+      chart.update('none');
+    } catch (e) { /* ignore */ }
+  }
+
+  /* ---------------- shared animation loop for scatter + bars ---------------- */
+  function runMotion(S) {
+    if (S.motionRaf || S.closed) return;
+    S.motionLast = performance.now();
+    function frame(now) {
+      S.motionRaf = 0;
+      if (S.closed) return;
+      var dt = Math.min(0.033, Math.max(0.001, (now - S.motionLast) / 1000)); S.motionLast = now;
+      var moving = S.kind === 'scatter' ? stepScatter(S, dt) : stepBars(S, dt);
+      S.chart.draw();
+      if (moving) S.motionRaf = requestAnimationFrame(frame);
+    }
+    S.motionRaf = requestAnimationFrame(frame);
+  }
+
+  /* ---------------- details table ---------------- */
+  function fmtSigned(v) { return (v >= 0 ? '+' : '') + fmtNum(v); }
+  function buildTable(S, prep, meta) {
+    var cols = [], rows = [], ds0 = prep.cfg.data.datasets[0], L = prep.L, unit = meta.yUnit || '';
+    if (prep.kind === 'scatter') {
+      cols = [meta.xName || 'Weight', meta.yName || 'Reps', 'Sets', 'Last done'];
+      prep.groups.slice().sort(function (p, q) { return q.x - p.x || q.y - p.y; }).forEach(function (g) {
+        rows.push({ gi: g.gi, cells: [fmtNum(g.x) + (meta.xUnit || ''), fmtNum(g.y), String(g.n), fmtDay(g.last)] });
+      });
+    } else if (prep.kind === 'bar') {
+      var mean = 0, cnt = 0; ds0.data.forEach(function (p) { if (validPt(p)) { mean += p.y; cnt++; } }); mean = cnt ? mean / cnt : 0;
+      var counts = meta.counts || null;
+      cols = [meta.xName || 'Weight', meta.yName || 'Value'].concat(counts ? ['Sets'] : []).concat(['vs avg']);
+      ds0.data.forEach(function (p, i) {
+        if (!validPt(p)) return;
+        rows.push({ i: i, x: p.x, cells: [L[i], fmtNum(p.y) + unit].concat(counts ? [String(counts[i])] : []).concat([fmtSigned(p.y - mean)]) });
+      });
+    } else if (prep.cfg.data.datasets.length > 1) {
+      cols = ['Date'].concat(prep.cfg.data.datasets.map(function (d) { return d.label || 'Value'; }));
+      ds0.data.forEach(function (p, i) {
+        rows.push({ i: i, x: i, cells: [L[i]].concat(prep.cfg.data.datasets.map(function (d) { var q = d.data[i]; return q && q.y != null ? fmtNum(q.y) + unit : '—'; })) });
+      });
+    } else {
+      cols = ['Date', meta.yName || 'Value', 'Change', '%'];
+      var prev = null;
+      ds0.data.forEach(function (p, i) {
+        if (!validPt(p)) { rows.push({ i: i, x: i, cells: [L[i], '—', '—', '—'] }); return; }
+        var d = prev == null ? null : p.y - prev, pc = (prev ? (d / Math.abs(prev)) * 100 : null);
+        rows.push({ i: i, x: i, cells: [L[i], fmtNum(p.y) + unit, d == null ? '—' : fmtSigned(d), pc == null ? '—' : (pc >= 0 ? '+' : '') + pc.toFixed(1) + '%'] });
+        prev = p.y;
+      });
+    }
+    S.tableRows = rows;
+    var html = '<table class="cm-table"><thead><tr>' + cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      rows.map(function (r, ri) {
+        return '<tr data-r="' + ri + '">' + r.cells.map(function (c) { return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>';
+      }).join('') + '</tbody></table>';
+    return html;
+  }
+  function updateTable(S) {
+    var wrap = S.el && S.el.querySelector('.cm-table-wrap'); if (!wrap || !S.tableRows) return;
+    var v = S.view, trs = wrap.querySelectorAll('tbody tr');
+    S.tableRows.forEach(function (r, ri) {
+      var tr = trs[ri]; if (!tr) return;
+      var inView, sel = false;
+      if (S.kind === 'scatter') {
+        var g = S.groups[r.gi];
+        inView = g.x >= v.x0 && g.x <= v.x1 && g.y >= v.y0 && g.y <= v.y1;
+        sel = !!(S.sel && S.sel.has(r.gi));
+      } else { inView = r.x >= v.x0 - 0.5 && r.x <= v.x1 + 0.5; }
+      tr.classList.toggle('dim', !inView); tr.classList.toggle('sel', sel);
+    });
+  }
+  function highlightRow(S, ri) {
+    var r = S.tableRows[ri]; if (!r) return;
+    if (S.kind === 'scatter') {
+      S.sel = (S.sel && S.sel.size === 1 && S.sel.has(r.gi)) ? null : new Set([r.gi]);
+      S.chart.draw(); updateReadout(S); updateTable(S);
+      return;
+    }
+    try {
+      var ch = S.chart, els = [{ datasetIndex: 0, index: r.i }], m = ch.getDatasetMeta(0).data[r.i];
+      ch.setActiveElements(els);
+      if (ch.tooltip) ch.tooltip.setActiveElements(els, { x: m.x, y: m.y });
+      S.tipOn = true; ch.update('none');
+    } catch (e) { /* ignore */ }
+  }
+
+  /* ---------------- bottom panel (table) that can be swiped away ---------------- */
+  var PANEL_CLOSED = 52;
+  function panelOpenH() { return clamp(Math.round(window.innerHeight * 0.40), 190, 380); }
+  function bindPanel(S) {
+    var panel = S.el.querySelector('.cm-panel'), handle = S.el.querySelector('.cm-handle'), wrap = S.el.querySelector('.cm-table-wrap');
+    var txt = S.el.querySelector('.cm-handle-text'), hint = S.el.querySelector('.cm-hint');
+    var drag = null;
+    function setOpen(open, instant) {
+      killStretch(S);
+      S.panelOpen = open;
+      panel.classList.toggle('drag', !!instant);
+      panel.style.height = (open ? panelOpenH() : PANEL_CLOSED) + 'px';
+      panel.classList.toggle('closed', !open);
+      txt.textContent = open ? 'Swipe down for full-screen graph' : 'Swipe up for details';
+      hint.style.display = open ? '' : 'none';
+    }
+    S.setPanel = setOpen;
+    function start(y) { killStretch(S); clearTip(S); drag = { y0: y, h0: panel.getBoundingClientRect().height, y: y, t: performance.now(), vy: 0 }; panel.classList.add('drag'); }
+    function move(y) {
+      if (!drag) return;
+      var now = performance.now(); drag.vy = (y - drag.y) / Math.max(1, now - drag.t); drag.y = y; drag.t = now;
+      panel.style.height = clamp(drag.h0 - (y - drag.y0), PANEL_CLOSED, panelOpenH()) + 'px';
+    }
+    function end() {
+      if (!drag) return;
+      var h = panel.getBoundingClientRect().height, moved = Math.abs(drag.y - drag.y0) > 6;
+      var open = drag.vy < -0.3 ? true : drag.vy > 0.3 ? false : h > (PANEL_CLOSED + panelOpenH()) / 2;
+      if (!moved) open = !S.panelOpen;   // plain tap on the handle toggles
+      drag = null; setOpen(open, false);
+    }
+    handle.addEventListener('pointerdown', function (e) { try { handle.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } start(e.clientY); });
+    handle.addEventListener('pointermove', function (e) { move(e.clientY); });
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+    // Swiping down on the table while it is scrolled to the top also pulls the panel down.
+    var ty = null;
+    wrap.addEventListener('touchstart', function (e) { ty = e.touches[0].clientY; }, { passive: true });
+    wrap.addEventListener('touchmove', function (e) {
+      var y = e.touches[0].clientY;
+      if (!drag && wrap.scrollTop <= 0 && y - ty > 8) start(ty);
+      if (drag) { e.preventDefault(); move(y); }
+    }, { passive: false });
+    wrap.addEventListener('touchend', end); wrap.addEventListener('touchcancel', end);
+    panel.addEventListener('transitionend', function (e) { if (e.propertyName === 'height' && !S.closed) S.chart.resize(); });
+    wrap.addEventListener('click', function (e) { var tr = e.target.closest('tr[data-r]'); if (tr) highlightRow(S, +tr.getAttribute('data-r')); });
+    setOpen(true, true);
   }
 
   /* ---------------- open / close ---------------- */
@@ -460,25 +879,40 @@ window.ChartMax = (function () {
       '</div>' +
       '<div class="cm-readout"></div>' +
       '<div class="cm-stage"><canvas></canvas></div>' +
-      '<div class="cm-hint"></div>';
+      '<div class="cm-panel">' +
+        '<div class="cm-handle" role="button" aria-label="Details"><span class="cm-grip"></span><span class="cm-handle-text"></span></div>' +
+        '<div class="cm-hint"></div>' +
+        '<div class="cm-table-wrap"></div>' +
+      '</div>';
     document.body.appendChild(el);
     document.body.style.overflow = 'hidden';
 
     var cv = el.querySelector('canvas');
-    var chart = new Chart(cv, prep.cfg);
-
     var S = cur = {
-      el: el, canvas: cv, chart: chart, kind: prep.kind, closed: false, mode: isLine ? 'stretch' : 'pan',
-      base: null, view: null, pointers: new Map(), gesture: null, lastTap: null, viewRaf: 0
+      el: el, canvas: cv, chart: null, kind: prep.kind, closed: false, mode: isLine ? 'stretch' : 'pan',
+      base: null, view: null, pointers: new Map(), gesture: null, lastTap: null, viewRaf: 0,
+      groups: prep.groups, sel: null, mag: null, lasso: null, bars: null, tableRows: null, panelOpen: true
     };
+    var panel = el.querySelector('.cm-panel');
+    panel.style.height = panelOpenH() + 'px';
+    var chart = S.chart = new Chart(cv, prep.cfg);
+    chart._cmS = S;
 
-    // Lock the auto-computed ranges as the "fit" view.
-    var sx = chart.scales.x, sy = chart.scales.y;
-    S.base = { x0: sx.min, x1: sx.max, y0: sy.min, y1: sy.max };
-    if (S.base.y1 <= S.base.y0) S.base.y1 = S.base.y0 + 1;
-    S.view = { x0: S.base.x0, x1: S.base.x1, y0: S.base.y0, y1: S.base.y1 };
+    // Fit view: explicit scatter ranges, otherwise whatever Chart.js computed — with a data-derived fallback.
+    var sx = chart.scales.x, sy = chart.scales.y, base;
+    if (prep.ranges) base = { x0: prep.ranges.x0, x1: prep.ranges.x1, y0: prep.ranges.y0, y1: prep.ranges.y1 };
+    else base = { x0: sx.min, x1: sx.max, y0: sy.min, y1: sy.max };
+    var okRange = isFinite(base.x0) && isFinite(base.x1) && isFinite(base.y0) && isFinite(base.y1) && base.x1 > base.x0;
+    if (!okRange) base = dataRange(chart.data.datasets[0].data);
+    if (!(base.y1 > base.y0)) base.y1 = base.y0 + 1;
+    S.base = base;
+    S.view = { x0: base.x0, x1: base.x1, y0: base.y0, y1: base.y1 };
     setView(S, S.view);
     setHint(S);
+
+    el.querySelector('.cm-table-wrap').innerHTML = buildTable(S, prep, meta);
+    bindPanel(S);
+    updateReadout(S);
 
     el.addEventListener('click', function (e) {
       if (e.target.closest('[data-act="close"]')) close();
@@ -487,26 +921,29 @@ window.ChartMax = (function () {
     bindGestures(S);
     S.onKey = function (e) { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', S.onKey);
-    S.onResize = function () { chart.resize(); };
+    S.onResize = function () { chart.resize(); if (S.setPanel) S.setPanel(S.panelOpen, true); };
     window.addEventListener('resize', S.onResize);
     requestAnimationFrame(function () { el.classList.add('open'); });
+    if (S.kind === 'bar') { initBars(S); runMotion(S); }
+    chart.draw();
   }
 
   function setHint(S) {
     var h = S.el.querySelector('.cm-hint');
     h.innerHTML = S.kind === 'line'
       ? 'Pinch to zoom &middot; drag to move &middot; pull the line to stretch it &middot; double-tap to reset'
-      : 'Pinch to zoom &middot; drag to move &middot; tap a point for details &middot; double-tap to reset';
+      : S.kind === 'scatter'
+        ? 'Pinch to zoom &middot; drag empty space to move &middot; drag near dots to pull them &middot; hold then draw a loop to lasso &middot; double-tap resets'
+        : 'Pinch to zoom &middot; drag to move &middot; drag a bar to wobble it like jelly &middot; double-tap to reset';
   }
 
   function bindGestures(S) {
     var stage = S.el.querySelector('.cm-stage');
     var cv = S.canvas;
     cv.style.touchAction = 'none';
-    var STRETCH_HIT = 26;   // px from the line that counts as "grabbing the line"
+    var STRETCH_HIT = 26, MAGNET_START = 80, LONG_MS = 420;
 
     function pos(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
-    // pixel -> data value for a given view (own maths, independent of Chart.js internals)
     function toData(v, a, p) {
       return { x: v.x0 + (p.x - a.left) / a.width * (v.x1 - v.x0), y: v.y1 - (p.y - a.top) / a.height * (v.y1 - v.y0) };
     }
@@ -518,8 +955,6 @@ window.ChartMax = (function () {
       } else { m = pts[0] || { x: 0, y: 0 }; }
       return { a: a, mid: m, dist: d };
     }
-    // Remember where the view started and which data point sits under the fingers; every
-    // move then recomputes the view from that snapshot, so it never drifts or lags.
     function snapshot(g) {
       var m = metrics();
       g.v0 = { x0: S.view.x0, x1: S.view.x1, y0: S.view.y0, y1: S.view.y1 };
@@ -534,8 +969,25 @@ window.ChartMax = (function () {
       var y1 = g.anchor.y + (m.mid.y - a.top) / a.height * sy;
       setView(S, { x0: x0, x1: x0 + sx, y0: y1 - sy, y1: y1 }, true);
     }
+    function cancelLong(g) { if (g && g.longTimer) { clearTimeout(g.longTimer); g.longTimer = 0; } }
+    function barHit(p) {
+      if (!S.bars) return -1;
+      var best = -1, bd = Infinity;
+      for (var i = 0; i < S.bars.n; i++) {
+        var g = barGeom(S.chart, i); if (!g) continue;
+        var dx = Math.abs(p.x - g.x);
+        if (dx <= g.w / 2 + 10 && p.y >= g.top - 26 && p.y <= g.base + 8 && dx < bd) { bd = dx; best = i; }
+      }
+      return best;
+    }
+    // Let go of whichever "pull" is in progress (a second finger or a cancel ends it gracefully).
+    function releasePulls() {
+      killStretch(S);
+      if (S.mag && S.mag.on) { S.mag.on = false; runMotion(S); }
+      if (S.bars && S.bars.pin >= 0) { S.bars.pin = -1; runMotion(S); }
+      if (S.lasso) { S.lasso = null; S.chart.draw(); }
+    }
 
-    // While a gesture is running, keep Chart.js from fighting us with tooltips.
     stage.addEventListener('pointermove', function (e) { if (S.gesture && S.gesture.moved) e.stopPropagation(); }, true);
 
     stage.addEventListener('pointerdown', function (e) {
@@ -547,18 +999,28 @@ window.ChartMax = (function () {
       window.addEventListener('pointercancel', onUp);
       var g = S.gesture || (S.gesture = { moved: false, type: null, startPos: p, last: p });
       if (S.pointers.size >= 2) {
-        // a second finger: let go of any stretch (it springs back) and switch to pinch
-        if (S.chart._cmStretch && S.chart._cmStretch.pinned) releaseSpring(S);
-        g.type = 'pinch'; g.moved = true; g.pendingStretch = null;
+        cancelLong(g); releasePulls(); clearTip(S);
+        g.type = 'pinch'; g.moved = true; g.pending = null;
         snapshot(g);
         return;
       }
-      g.type = null; g.moved = false; g.startPos = p; g.last = p; g.lastT = 0;
+      g.type = null; g.moved = false; g.startPos = p; g.last = p; g.lastT = 0; g.pending = null;
       snapshot(g);
-      var wantsStretch = S.kind === 'line' && !e.shiftKey && e.button !== 1;
-      if (wantsStretch) {
+      if (S.kind === 'line' && !e.shiftKey && e.button !== 1) {
         var hit = nearestLine(S.chart, p.x, p.y);
-        if (hit.dist < STRETCH_HIT) g.pendingStretch = { ds: hit.ds, ax: p.x, ay: p.y };
+        if (hit.dist < STRETCH_HIT) g.pending = { type: 'stretch', ds: hit.ds, ax: p.x, ay: p.y };
+      } else if (S.kind === 'scatter') {
+        if (nearestGroupDist(S, p) < MAGNET_START) g.pending = { type: 'magnet' };
+        g.longTimer = setTimeout(function () {
+          g.longTimer = 0;
+          if (g.moved || S.pointers.size !== 1) return;
+          g.type = 'lasso'; g.moved = true; g.pending = null;
+          S.sel = null; S.lasso = { pts: [S.pointers.values().next().value], active: true };
+          buzz(10); S.chart.draw(); updateReadout(S);
+        }, LONG_MS);
+      } else if (S.kind === 'bar') {
+        var bi = barHit(p);
+        if (bi >= 0) g.pending = { type: 'jelly', i: bi, x0: p.x, y0: p.y };
       }
     });
 
@@ -569,23 +1031,29 @@ window.ChartMax = (function () {
       S.pointers.set(e.pointerId, p);
 
       if (S.pointers.size >= 2) { applyGesture(g); return; }
+      if (g.type === 'lasso') {
+        var lp = S.lasso && S.lasso.pts, lastp = lp && lp[lp.length - 1];
+        if (lp && Math.hypot(p.x - lastp.x, p.y - lastp.y) > 4) { lp.push(p); S.chart.draw(); }
+        return;
+      }
 
       var dx = p.x - g.startPos.x, dy = p.y - g.startPos.y;
-      if (!g.moved && Math.hypot(dx, dy) < 5) return;
+      if (!g.moved && Math.hypot(dx, dy) < 6) return;
       if (!g.moved) {
-        g.moved = true;
-        S.chart.setActiveElements([]);
-        if (S.chart.tooltip) S.chart.tooltip.setActiveElements([], { x: 0, y: 0 });
-        var ns = null;
-        if (g.pendingStretch) {
-          var ps = g.pendingStretch;
+        g.moved = true; cancelLong(g);
+        clearTip(S);
+        var pd = g.pending;
+        if (pd && pd.type === 'stretch') {
           var old = S.chart._cmStretch; if (old) cancelAnimationFrame(old.raf);
-          ns = buildStretch(S.chart, ps.ds, { x: ps.ax, y: ps.ay });
+          var ns = buildStretch(S.chart, pd.ds, { x: pd.ax, y: pd.ay });
           S.chart._cmStretch = ns;
-          if (ns) runStretch(S, ns);
+          if (ns) { runStretch(S, ns); g.type = 'stretch'; cv.style.cursor = 'grabbing'; }
+        } else if (pd && pd.type === 'magnet') {
+          S.sel = null; S.mag = { on: true, x: p.x, y: p.y }; g.type = 'magnet'; buzz(6); runMotion(S);
+        } else if (pd && pd.type === 'jelly') {
+          S.bars.pin = pd.i; S.bars.py = 0; S.bars.px = 0; g.type = 'jelly'; buzz(6); runMotion(S);
         }
-        if (ns) { g.type = 'stretch'; cv.style.cursor = 'grabbing'; }
-        else { g.type = 'pan'; snapshot(g); }
+        if (!g.type) { g.type = 'pan'; snapshot(g); }
       }
       if (g.type === 'stretch') {
         var st = S.chart._cmStretch; if (!st) return;
@@ -593,6 +1061,10 @@ window.ChartMax = (function () {
         if (g.lastT) { var dtm = Math.max(1, nowT - g.lastT) / 1000; st.fvx = (p.x - g.last.x) / dtm; st.fvy = (p.y - g.last.y) / dtm; }
         g.lastT = nowT; g.last = p;
         st.px = dx; st.py = dy;
+      } else if (g.type === 'magnet') {
+        if (S.mag) { S.mag.x = p.x; S.mag.y = p.y; S.mag.on = true; runMotion(S); }
+      } else if (g.type === 'jelly') {
+        S.bars.py = p.y - g.pending.y0; S.bars.px = p.x - g.pending.x0; runMotion(S);
       } else if (g.type === 'pan') {
         applyGesture(g);
       }
@@ -608,28 +1080,32 @@ window.ChartMax = (function () {
         window.removeEventListener('pointerup', onUp);
         window.removeEventListener('pointercancel', onUp);
         cv.style.cursor = '';
+        cancelLong(g);
         if (g && g.type === 'stretch') releaseSpring(S);
+        else if (g && g.type === 'magnet') { if (S.mag) S.mag.on = false; runMotion(S); }
+        else if (g && g.type === 'jelly') { S.bars.pin = -1; buzz(8); runMotion(S); }
+        else if (g && g.type === 'lasso') finishLasso(S);
         updateReadout(S);
-        // double-tap -> reset zoom
         if (g && !g.moved && e.type === 'pointerup') {
+          if (S.sel) { S.sel = null; S.chart.draw(); updateReadout(S); }   // tap clears a lasso selection
           var now = Date.now();
           if (S.lastTap && now - S.lastTap.t < 340 && Math.hypot(p.x - S.lastTap.x, p.y - S.lastTap.y) < 36) {
-            S.lastTap = null;
+            S.lastTap = null; clearTip(S);
             animateView(S, S.base);
           } else {
             S.lastTap = { x: p.x, y: p.y, t: now };
+            showTip(S, p);
           }
         }
         S.gesture = null;
       } else if (g) {
-        // one finger lifted: carry on as a pan from the finger that remains, without a jump
-        g.type = 'pan'; g.moved = true; g.pendingStretch = null;
+        g.type = 'pan'; g.moved = true; g.pending = null;
         snapshot(g);
       }
     }
 
     stage.addEventListener('wheel', function (e) {
-      e.preventDefault();
+      e.preventDefault(); clearTip(S);
       var p = pos(e), a = S.chart.chartArea, v = S.view;
       var f = Math.exp(e.deltaY * (e.ctrlKey ? 0.012 : 0.0018));
       var an = toData(v, a, p), L = viewLimits(S);
@@ -642,6 +1118,7 @@ window.ChartMax = (function () {
       window.removeEventListener('pointermove', onMove, true);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
+      if (S.gesture) cancelLong(S.gesture);
     };
   }
 
@@ -650,7 +1127,7 @@ window.ChartMax = (function () {
     if (!S) return;
     S.closed = true;
     cur = null;
-    cancelAnimationFrame(S.viewRaf); cancelAnimationFrame(S.applyRaf);
+    cancelAnimationFrame(S.viewRaf); cancelAnimationFrame(S.applyRaf); cancelAnimationFrame(S.motionRaf);
     var st = S.chart._cmStretch; if (st) cancelAnimationFrame(st.raf);
     if (S.cleanupGestures) S.cleanupGestures();
     document.removeEventListener('keydown', S.onKey);
