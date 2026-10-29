@@ -427,6 +427,12 @@
   .cm-chip{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 10px;display:flex;flex-direction:column;min-width:68px;flex-shrink:0;}
   .cm-chip span{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;}
   .cm-chip b{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--text);}
+  .cm-legend{display:flex;align-items:center;gap:7px;padding:0 14px 8px;font-size:10.5px;color:var(--text-faint);white-space:nowrap;overflow-x:auto;}
+  .cm-grad{display:inline-block;width:56px;height:7px;border-radius:4px;background:linear-gradient(90deg,#4D5E78,#C1543A,#E8B32C);}
+  .cm-sep{width:1px;height:12px;background:var(--border);margin:0 4px;}
+  .cm-dots{display:inline-flex;align-items:center;gap:3px;}
+  .cm-dots u{display:inline-block;border-radius:50%;background:var(--text-dim);width:6px;height:6px;}
+  .cm-dots u:nth-child(2){width:9px;height:9px;} .cm-dots u:nth-child(3){width:13px;height:13px;}
   .cm-stage{flex:1;min-height:0;position:relative;margin:0 8px;touch-action:none;}
   .cm-stage canvas{width:100%!important;height:100%!important;touch-action:none;}
   .cm-tip{position:absolute;display:none;z-index:3;pointer-events:none;max-width:86%;background:rgba(34,38,44,.97);border:1px solid var(--border);
@@ -614,7 +620,7 @@
 
 <script src="exercise-database.js"></script>
 <script src="stats3d.js"></script>
-<script src="chart-max.js?v=46"></script>
+<script src="chart-max.js?v=47"></script>
 <script>
 /* ============ STATE ============ */
 let DB = { splits: [], exercises: [], sets: [], exerciseClassificationOverrides: {}, exerciseDatabase: null };

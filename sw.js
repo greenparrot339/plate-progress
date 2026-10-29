@@ -1,6 +1,6 @@
-const CACHE_NAME = 'plate-progress-v46-fresh-assets';
+const CACHE_NAME = 'plate-progress-v47-legend';
 const APP_SHELL = [
-  './', './index.html', './manifest.json', './exercise-database.js', './stats3d.js', './chart-max.js?v=46', './body.glb',
+  './', './index.html', './manifest.json', './exercise-database.js', './stats3d.js', './chart-max.js?v=47', './body.glb',
   './icon-192.png', './icon-512.png'
 ];
 

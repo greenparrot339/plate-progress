@@ -561,17 +561,6 @@ window.ChartMax = (function () {
       ctx.setLineDash([6, 5]); ctx.strokeStyle = '#E8B32C'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke(); ctx.setLineDash([]);
     }
     ctx.restore();
-    // legend: colour = recency, size = number of sets
-    ctx.save();
-    var lx = a.right - 78, ly = a.top + 10;
-    var grd = ctx.createLinearGradient(lx, 0, lx + 64, 0);
-    grd.addColorStop(0, recencyColor(0, 1)); grd.addColorStop(0.5, recencyColor(0.5, 1)); grd.addColorStop(1, recencyColor(1, 1));
-    ctx.fillStyle = 'rgba(14,16,19,.7)'; ctx.fillRect(lx - 8, ly - 6, 80, 40);
-    ctx.fillStyle = grd; ctx.fillRect(lx, ly, 64, 6);
-    ctx.fillStyle = '#9A9FA6'; ctx.font = '9.5px Inter, sans-serif'; ctx.textBaseline = 'top';
-    ctx.textAlign = 'left'; ctx.fillText('older', lx, ly + 9); ctx.textAlign = 'right'; ctx.fillText('newer', lx + 64, ly + 9);
-    ctx.textAlign = 'left'; ctx.fillText('bigger = more sets', lx - 4, ly + 21);
-    ctx.restore();
   }
 
   var MAGNET_R = 96;
@@ -928,6 +917,7 @@ window.ChartMax = (function () {
         '</div>' +
       '</div>' +
       '<div class="cm-readout"></div>' +
+      (prep.kind === 'scatter' ? '<div class="cm-legend"><span>Colour</span><i class="cm-grad"></i><span>older → newer</span><span class="cm-sep"></span><span>Size</span><i class="cm-dots"><u></u><u></u><u></u></i><span>more sets</span></div>' : '') +
       '<div class="cm-stage"><canvas></canvas></div>' +
       '<div class="cm-panel">' +
         '<div class="cm-handle" role="button" aria-label="Details"><span class="cm-grip"></span><span class="cm-handle-text"></span></div>' +
