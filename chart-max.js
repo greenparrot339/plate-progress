@@ -44,9 +44,9 @@ window.ChartMax = (function () {
   }
 
   /* ---------------- attach: called for every small chart ---------------- */
-  function attach(canvas, json, meta) {
+  function attach(canvas, json, meta, snapErr) {
     if (!canvas) return;
-    registry.set(canvas, { json: json, meta: meta || {} });
+    registry.set(canvas, { json: json, meta: meta || {}, err: snapErr || null });
     var wrap = canvas.closest('.chart-wrap');
     if (!wrap || wrap._cmBound) return;
     wrap._cmBound = true;
@@ -71,6 +71,35 @@ window.ChartMax = (function () {
     });
     wrap.addEventListener('pointercancel', function () { down = null; });
   }
+
+  /* ---------------- diagnostics: never fail silently ---------------- */
+  function errText(err) {
+    var m = (err && (err.message || String(err))) || 'unknown error';
+    var st = (err && err.stack) ? String(err.stack).split('\n').slice(1, 3).map(function (l) { return l.trim().replace(/^at\s+/, '').replace(/https?:\/\/[^/]+\//, ''); }).join(' < ') : '';
+    return m + (st ? '  [' + st + ']' : '');
+  }
+  function showFatal(msg) {
+    try {
+      var old = document.getElementById('cm-fatal'); if (old) old.remove();
+      var d = document.createElement('div'); d.id = 'cm-fatal';
+      d.textContent = "Couldn't open the chart: " + msg + '  (tap to dismiss)';
+      d.style.cssText = 'position:fixed;left:10px;right:10px;bottom:calc(90px + env(safe-area-inset-bottom));z-index:400;background:#3A2620;color:#F2C9BC;border:1px solid #C1543A;border-radius:10px;padding:10px 12px;font:12px/1.4 monospace;word-break:break-word;';
+      d.onclick = function () { d.remove(); };
+      document.body.appendChild(d);
+      setTimeout(function () { if (d.parentNode) d.remove(); }, 30000);
+    } catch (e) { /* ignore */ }
+  }
+  function reportErr(S, label, err) {
+    console.error('[chart-max] ' + label, err);
+    try {
+      var stage = S && S.el && S.el.querySelector('.cm-stage');
+      if (!stage) return;
+      var d = stage.querySelector('.cm-diag');
+      if (!d) { d = document.createElement('div'); d.className = 'cm-diag'; d.style.cssText = 'position:absolute;left:4px;right:4px;bottom:4px;z-index:5;background:rgba(58,38,32,.95);color:#F2C9BC;border-radius:8px;padding:6px 8px;font:11px/1.35 monospace;word-break:break-word;max-height:40%;overflow:auto;pointer-events:none;'; stage.appendChild(d); }
+      d.textContent += (d.textContent ? '\n' : '') + label + ': ' + errText(err);
+    } catch (e) { /* ignore */ }
+  }
+  function safe(S, label, fn) { try { return fn(); } catch (err) { reportErr(S, label, err); } }
 
   /* ---------------- small helpers ---------------- */
   function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* ignore */ } }
@@ -118,7 +147,9 @@ window.ChartMax = (function () {
     var cfg = JSON.parse(json);
     var kind = cfg.type; // 'line' | 'bar' | 'scatter'
     var labels = (cfg.data && cfg.data.labels) || null;
-    var L = labels ? labels.slice() : null;
+    // Chart.js can leave an empty `labels: []` on scatter configs; that must not make it a category chart.
+    var L = (labels && labels.length && kind !== 'scatter') ? labels.slice() : null;
+    if (kind === 'scatter' && cfg.data) delete cfg.data.labels;
     var opt = cfg.options = cfg.options || {};
     opt.responsive = true;
     opt.maintainAspectRatio = false;
@@ -215,8 +246,14 @@ window.ChartMax = (function () {
     },
     beforeDatasetDraw: function (chart, args) {
       var S = chart._cmS;
-      if (S && S.kind === 'scatter') { if (args.index === 0) drawScatter(chart, S); return false; }
-      if (S && S.kind === 'bar') { if (args.index === 0) drawBars(chart, S); return false; }
+      if (S && S.kind === 'scatter') {
+        if (args.index === 0) { try { drawScatter(chart, S); } catch (e) { if (!S.drawErr) { S.drawErr = 1; reportErr(S, 'scatter draw', e); } return; } }
+        return false;
+      }
+      if (S && S.kind === 'bar') {
+        if (args.index === 0) { try { drawBars(chart, S); } catch (e) { if (!S.drawErr) { S.drawErr = 1; reportErr(S, 'bar draw', e); } return; } }
+        return false;
+      }
       var st = chart._cmStretch;
       if (!st || !st.on || args.index !== st.ds) return;
       drawStretched(chart, args.index, st);
@@ -860,6 +897,7 @@ window.ChartMax = (function () {
     try { openImpl(canvas); }
     catch (err) {
       console.error('Chart maximize failed', err);
+      showFatal(errText(err));
       try { if (cur) { cur.closed = true; if (cur.cleanupGestures) cur.cleanupGestures(); document.removeEventListener('keydown', cur.onKey); window.removeEventListener('resize', cur.onResize); try { cur.chart.destroy(); } catch (e2) { /* ignore */ } } } catch (e3) { /* ignore */ }
       cur = null;
       var ov = document.getElementById('chart-max-overlay'); if (ov) ov.remove();
@@ -870,6 +908,7 @@ window.ChartMax = (function () {
     if (cur) return;
     var reg = registry.get(canvas);
     if (!reg || typeof Chart === 'undefined') return;
+    if (reg.err || !reg.json) { showFatal('could not read this chart\'s settings: ' + errText(reg.err || 'empty')); return; }
     var meta = reg.meta || {};
     var prep = prepare(reg.json, meta);
     var card = canvas.closest('.card');
@@ -922,9 +961,9 @@ window.ChartMax = (function () {
     setView(S, S.view);
     setHint(S);
 
-    el.querySelector('.cm-table-wrap').innerHTML = buildTable(S, prep, meta);
-    bindPanel(S);
-    updateReadout(S);
+    safe(S, 'details table', function () { el.querySelector('.cm-table-wrap').innerHTML = buildTable(S, prep, meta); });
+    safe(S, 'details panel', function () { bindPanel(S); });
+    safe(S, 'readout', function () { updateReadout(S); });
 
     bindGestures(S);
     S.onKey = function (e) { if (e.key === 'Escape') close(); };
@@ -932,8 +971,8 @@ window.ChartMax = (function () {
     S.onResize = function () { chart.resize(); if (S.setPanel) S.setPanel(S.panelOpen, true); };
     window.addEventListener('resize', S.onResize);
     requestAnimationFrame(function () { el.classList.add('open'); });
-    if (S.kind === 'bar') { initBars(S); runMotion(S); }
-    chart.draw();
+    if (S.kind === 'bar') safe(S, 'bars', function () { initBars(S); runMotion(S); });
+    safe(S, 'draw', function () { chart.draw(); });
   }
 
   function setHint(S) {

@@ -1,6 +1,6 @@
-const CACHE_NAME = 'plate-progress-v43-chart-safe-open';
+const CACHE_NAME = 'plate-progress-v46-fresh-assets';
 const APP_SHELL = [
-  './', './index.html', './manifest.json', './exercise-database.js', './stats3d.js', './chart-max.js', './body.glb',
+  './', './index.html', './manifest.json', './exercise-database.js', './stats3d.js', './chart-max.js?v=46', './body.glb',
   './icon-192.png', './icon-512.png'
 ];
 
@@ -16,7 +16,12 @@ const OFFLINE_DEPENDENCIES = [
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
-    await cache.addAll(APP_SHELL);
+    // `reload` bypasses the browser's HTTP cache so a new version can never be built from stale files.
+    await Promise.all(APP_SHELL.map(async url => {
+      const response = await fetch(url, { cache: 'reload' });
+      if (!response.ok) throw new Error('Could not cache ' + url);
+      await cache.put(url, response);
+    }));
 
     // Cache CDN/Google Fonts resources when online. If one external service is
     // temporarily unavailable, don't make installation fail: those resources

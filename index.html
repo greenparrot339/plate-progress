@@ -614,7 +614,7 @@
 
 <script src="exercise-database.js"></script>
 <script src="stats3d.js"></script>
-<script src="chart-max.js"></script>
+<script src="chart-max.js?v=46"></script>
 <script>
 /* ============ STATE ============ */
 let DB = { splits: [], exercises: [], sets: [], exerciseClassificationOverrides: {}, exerciseDatabase: null };
@@ -4068,11 +4068,13 @@ function destroyCharts(){ Object.values(charts).forEach(c=>{ if(c) c.destroy(); 
 // Make a small Progress chart double-tap / expand-button maximizable (see chart-max.js).
 // The pristine user config is snapshotted as JSON; the full-screen chart is rebuilt from it.
 function maxifyChart(chart, meta){
+  if(!chart || !window.ChartMax) return;
+  let json=null, err=null;
   try{
-    if(!chart || !window.ChartMax) return;
     const cfg = chart.config && (chart.config._config || chart.config);
-    ChartMax.attach(chart.canvas, JSON.stringify({type:cfg.type, data:cfg.data, options:cfg.options}), meta||{});
-  }catch(err){ console.warn('Chart maximize unavailable', err); }
+    json = JSON.stringify({type:cfg.type, data:cfg.data, options:cfg.options});
+  }catch(e){ err=e; console.warn('Chart snapshot failed', e); }
+  try{ ChartMax.attach(chart.canvas, json, meta||{}, err); }catch(e){ console.warn('Chart maximize unavailable', e); }
 }
 
 let appBackGuardReady=false;
