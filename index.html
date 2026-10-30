@@ -621,6 +621,8 @@
 <script src="exercise-database.js"></script>
 <script src="stats3d.js"></script>
 <script src="chart-max.js?v=47"></script>
+<script src="strength-intelligence.js?v=1"></script>
+<script src="strength-ui.js?v=1"></script>
 <script>
 /* ============ STATE ============ */
 let DB = { splits: [], exercises: [], sets: [], exerciseClassificationOverrides: {}, exerciseDatabase: null };
@@ -1193,7 +1195,7 @@ document.querySelectorAll('.navbtn').forEach(b=>{
     // tab-swipe gesture compete with it.
     if(t.closest('.day-scroll') || t.closest('.chart-wrap') || t.closest('.segmented') ||
        t.closest('select') || t.closest('input') || t.closest('button') || t.closest('.stats3d-wrap') ||
-       t.closest('.split-gallery-track') || t.closest('#gallery-max-overlay') || t.closest('#chart-max-overlay')) return;
+       t.closest('.split-gallery-track') || t.closest('#gallery-max-overlay') || t.closest('#chart-max-overlay') || t.closest('#si-overlay')) return;
     const touch = e.touches[0];
     sx=touch.clientX; sy=touch.clientY; st=Date.now(); tracking=true;
   }, {passive:true});
@@ -2812,6 +2814,13 @@ function renderStats(){
   bindStatsRangeToggle();
   mountStats3D();
   setupStats3DFullscreenUI();
+
+  // Strength Intelligence: doorway card below the 3D body (see strength-ui.js).
+  if(window.StrengthUI && window.StrengthIntelligence){
+    $main.insertAdjacentHTML('beforeend','<div id="si-card-mount"></div>');
+    try{ StrengthUI.mountCard(document.getElementById('si-card-mount'), {getData:()=>DB, identityKey:exerciseIdentityKey, idbGet, idbSet}); }
+    catch(err){ console.warn('Strength Intelligence unavailable', err); }
+  }
 }
 
 // Builds the futuristic radar/spider chart used inside the fullscreen "Show graph"
@@ -4094,6 +4103,11 @@ function installBackGuard(){
   window.addEventListener('popstate', e=>{
     if(window.ChartMax && ChartMax.isOpen()){
       ChartMax.close();
+      history.pushState({ppTab:state.tab}, '', location.href);
+      return;
+    }
+    if(window.StrengthUI && StrengthUI.isOpen()){
+      StrengthUI.close();
       history.pushState({ppTab:state.tab}, '', location.href);
       return;
     }
