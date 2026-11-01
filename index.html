@@ -622,7 +622,7 @@
 <script src="stats3d.js"></script>
 <script src="chart-max.js?v=47"></script>
 <script src="strength-intelligence.js?v=1"></script>
-<script src="strength-ui.js?v=1"></script>
+<script src="strength-ui.js?v=3"></script>
 <script>
 /* ============ STATE ============ */
 let DB = { splits: [], exercises: [], sets: [], exerciseClassificationOverrides: {}, exerciseDatabase: null };
@@ -2818,7 +2818,7 @@ function renderStats(){
   // Strength Intelligence: doorway card below the 3D body (see strength-ui.js).
   if(window.StrengthUI && window.StrengthIntelligence){
     $main.insertAdjacentHTML('beforeend','<div id="si-card-mount"></div>');
-    try{ StrengthUI.mountCard(document.getElementById('si-card-mount'), {getData:()=>DB, identityKey:exerciseIdentityKey, idbGet, idbSet}); }
+    try{ StrengthUI.mountCard(document.getElementById('si-card-mount'), {getData:()=>DB, getSplits:()=>DB.splits.map(sp=>({id:sp.id, name:sp.name, active:!sp.archivedAt, dayIds:[...(sp.dayIds||[]), ...(sp.days||[]).map(d=>d.id)]})), identityKey:exerciseIdentityKey, idbGet, idbSet}); }
     catch(err){ console.warn('Strength Intelligence unavailable', err); }
   }
 }

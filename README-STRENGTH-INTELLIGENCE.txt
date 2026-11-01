@@ -9,8 +9,9 @@ Files
 
 Data
 - Reads the existing sets/exercises. Nothing in them is changed or duplicated.
-- Same lift on several days/splits is pooled by name (same normalisation as the rest of the app).
-- One new IndexedDB key, 'strengthIntelligence' {version, unit, tab, forecasts[]}: kg/lb choice, last tab, forecast log.
+- Follows the ACTIVE split (like the rest of the app); switching split changes the lifts shown. The dashboard's 'Lifts from' picker
+  can show any single split (active or archived) without activating it, or All splits combined. Same lift on several days is pooled by name (same normalisation as the rest of the app).
+- One new IndexedDB key, 'strengthIntelligence' {version, unit, tab, scope, forecasts[]}: kg/lb choice, last tab, split scope, forecast log.
   It is not part of the JSON backup (forecast history only; everything else is recomputed from your sets).
 
 Model (no machine learning)

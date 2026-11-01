@@ -13,7 +13,7 @@
 window.StrengthUI = (function () {
   'use strict';
   var SI = window.StrengthIntelligence;
-  var ctx = null, store = { version: 1, unit: 'kg', tab: 'ask', forecasts: [] }, storeLoaded = false;
+  var ctx = null, store = { version: 1, unit: 'kg', tab: 'ask', scope: 'active', forecasts: [] }, storeLoaded = false;
   var S = { key: null, tab: 'ask', mode: 'w2r', weightKg: null, repsIn: 8, range: '30', curveX: null, trendSel: null };
   var cache = {}, catalogCache = null, e1Cache = {};
   var reduceMotion = false;
@@ -43,6 +43,7 @@ window.StrengthUI = (function () {
       if (v && v.version === 1) {
         store.unit = v.unit === 'lb' ? 'lb' : 'kg';
         store.tab = ['ask', 'curve', 'trend', 'insights'].indexOf(v.tab) >= 0 ? v.tab : 'ask';
+        store.scope = v.scope === 'all' ? 'all' : 'active';
         store.forecasts = Array.isArray(v.forecasts) ? v.forecasts.slice(-300) : [];
       }
       storeLoaded = true;
@@ -50,29 +51,52 @@ window.StrengthUI = (function () {
   }
   function saveStore() {
     if (!ctx || !ctx.idbSet) return;
-    try { Promise.resolve(ctx.idbSet('strengthIntelligence', { version: 1, unit: store.unit, tab: store.tab, forecasts: store.forecasts.slice(-300) })).catch(function () {}); } catch (e) {}
+    try { Promise.resolve(ctx.idbSet('strengthIntelligence', { version: 1, unit: store.unit, tab: store.tab, scope: store.scope, forecasts: store.forecasts.slice(-300) })).catch(function () {}); } catch (e) {}
   }
 
   /* ---------- data / analysis ---------- */
+  // Scope: 'active' (the app's active split), 'all', or a specific split id.
+  // curScope is what the code below is currently computing for: the Stats-tab card always uses
+  // the persisted choice (active/all); the dashboard can additionally look at any single split.
+  var curScope = 'active';
+  function splitsList() { try { return ctx.getSplits ? ctx.getSplits() : []; } catch (e) { return []; } }
+  function activeSplitInfo() { return splitsList().filter(function (s) { return s.active; })[0] || null; }
+  function resolveScope(sc) {
+    if (sc === 'all') return { kind: 'all' };
+    var sp = (sc && sc !== 'active') ? splitsList().filter(function (x) { return x.id === sc; })[0] : null;
+    sp = sp || activeSplitInfo();
+    return sp ? { kind: 'split', split: sp } : { kind: 'all' };
+  }
+  function cardScope() { return store.scope === 'all' ? 'all' : 'active'; }
+  function scopeKey() { var r = resolveScope(curScope); return r.kind === 'all' ? 'all' : 'split:' + r.split.id; }
+  function dataFor(r) {
+    var d = ctx.getData();
+    if (r.kind === 'all') return d;
+    var sp = r.split, days = {}; (sp.dayIds || []).forEach(function (x) { days[x] = 1; });
+    var ex = (d.exercises || []).filter(function (e) { return e.splitId === sp.id || days[e.dayId]; });
+    var ids = {}; ex.forEach(function (e) { ids[e.id] = 1; });
+    return { exercises: ex, sets: (d.sets || []).filter(function (s) { return ids[s.exerciseId]; }) };
+  }
+  function data() { return dataFor(resolveScope(curScope)); }
   function dataSig(key) {
-    var d = ctx.getData(), h = 0, n = 0, s = d.sets || [];
+    var d = data(), h = 0, n = scopeKey().length, s = d.sets || [];
     for (var i = 0; i < s.length; i++) { var x = s[i]; n++; var t = x.id + '|' + x.exerciseId + '|' + x.date + '|' + x.weight + '|' + x.reps + '|' + (x.setType || ''); for (var j = 0; j < t.length; j++) h = (h * 31 + t.charCodeAt(j)) | 0; }
     var e = d.exercises || []; for (var k = 0; k < e.length; k++) { var q = e[k].id + e[k].name; for (var m = 0; m < q.length; m++) h = (h * 31 + q.charCodeAt(m)) | 0; }
-    return n + ':' + h;
+    return scopeKey() + ':' + n + ':' + h;
   }
   var lastSig = null;
   function checkCaches() { var sg = dataSig(); if (sg !== lastSig) { lastSig = sg; cache = {}; catalogCache = null; e1Cache = {}; } }
   function opts() { return { identityKey: ctx.identityKey }; }
-  function catalog() { checkCaches(); if (!catalogCache) catalogCache = SI.buildCatalog(ctx.getData(), opts()); return catalogCache; }
+  function catalog() { checkCaches(); if (!catalogCache) catalogCache = SI.buildCatalog(data(), opts()); return catalogCache; }
   function analysis(key) {
     checkCaches();
-    if (!cache[key]) cache[key] = SI.analyze(ctx.getData(), key, opts());
+    if (!cache[key]) cache[key] = SI.analyze(data(), key, opts());
     return cache[key];
   }
   function quickE1(key) {
     checkCaches();
     if (!(key in e1Cache)) {
-      var h = SI.getExerciseHistory(ctx.getData(), key, opts()), m = SI.fitModel(h);   // same E as the dashboard headline (backtest only changes the spread)
+      var h = SI.getExerciseHistory(data(), key, opts()), m = SI.fitModel(h);   // same E as the dashboard headline (backtest only changes the spread)
       e1Cache[key] = m ? m.E : null;
     }
     return e1Cache[key];
@@ -98,6 +122,9 @@ window.StrengthUI = (function () {
       '.si-card:active{transform:scale(.995);}',
       '.si-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}',
       '.si-eyebrow{font-family:var(--font-display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:500;}',
+      '.si-scope{font-size:11px;color:var(--text-faint);max-width:38vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
+      '.si-scopebar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-2px 0 10px;}',
+      '.si-scopebar .si-unit button{font-family:var(--font-body);font-size:11.5px;font-weight:500;}',
       '.si-chev{color:var(--text-faint);font-size:20px;line-height:1;}',
       '.si-card-body{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;}',
       '.si-lift{font-size:13px;color:var(--text-dim);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60vw;}',
@@ -233,9 +260,14 @@ window.StrengthUI = (function () {
   }
   function renderCard(el) {
     if (!el.isConnected) return;
-    var cat = catalog();
+    curScope = cardScope();
+    var cat = catalog(), rs = resolveScope(curScope), sp = rs.split, scoped = rs.kind === 'split';
     if (!cat.length) {
-      el.innerHTML = '<div class="card si-card" style="cursor:default"><div class="si-card-head"><div class="si-eyebrow">Strength Intelligence</div></div><div class="si-empty">Log a few working sets with weight and reps and this will estimate your 1RM, predict reps at any weight, and forecast your next session.</div></div>';
+      var other = scoped ? SI.buildCatalog(ctx.getData(), opts()).length : 0;
+      el.innerHTML = '<div class="card si-card" style="cursor:default"><div class="si-card-head"><div class="si-eyebrow">Strength Intelligence</div>' + (scoped ? '<div class="si-scope">' + esc(sp.name) + '</div>' : '') + '</div><div class="si-empty">' +
+        (other ? 'No weighted sets logged in <b style="color:var(--text)">' + esc(sp.name) + '</b> yet. Your other splits have history you can include.' : 'Log a few working sets with weight and reps and this will estimate your 1RM, predict reps at any weight, and forecast your next session.') + '</div>' +
+        (other ? '<button class="btn btn-sm btn-ghost" id="si-use-all" style="margin-top:10px">Use all splits</button>' : '') + '</div>';
+      var ua = $('si-use-all'); if (ua) ua.onclick = function () { store.scope = 'all'; saveStore(); renderCard(el); };
       return;
     }
     var top = cat[0], a = analysis(top.key); trackForecasts(a);
@@ -252,7 +284,7 @@ window.StrengthUI = (function () {
       nudge = '<div class="si-nudge">At <b>' + fwu(f.basis.weight) + '</b> next time: <b>~' + p.reps + ' reps</b>' + (p.low !== p.high ? ' (' + p.low + '–' + p.high + ')' : '') + '</div>';
     }
     el.innerHTML = '<div class="card si-card" id="si-card-open" role="button" tabindex="0" aria-label="Open Strength Intelligence">' +
-      '<div class="si-card-head"><div class="si-eyebrow">Strength Intelligence</div><div class="si-chev">›</div></div>' +
+      '<div class="si-card-head"><div class="si-eyebrow">Strength Intelligence</div><div style="display:flex;align-items:center;gap:8px"><span class="si-scope">' + (scoped ? esc(sp.name) : 'All splits') + '</span><div class="si-chev">›</div></div></div>' +
       '<div class="si-card-body"><div style="min-width:0"><div class="si-lift">' + esc(a.name) + ' · est. 1RM</div>' +
       '<div class="si-big">' + fw(m.E) + '<small>' + unit() + '</small></div><div class="si-delta">' + delta + '</div></div>' + sparkSvg(spark) + '</div>' + nudge + '</div>';
     var c = $('si-card-open');
@@ -266,6 +298,7 @@ window.StrengthUI = (function () {
     if (!ctx) return;
     injectStyles();
     loadStore().then(function () {
+      S.scope = cardScope(); curScope = S.scope;
       var cat = catalog(); if (!cat.length) return;
       S.key = (key && cat.some(function (c) { return c.key === key; })) ? key : cat[0].key;
       S.tab = store.tab; S.mode = 'w2r'; S.curveX = null; S.trendSel = null; S.weightKg = null; S.rangeAuto = false; S.range = '30';
@@ -283,6 +316,18 @@ window.StrengthUI = (function () {
     var cardEl = $('si-card-mount'); if (cardEl) renderCard(cardEl);   // refresh the preview (unit etc.)
   }
 
+  function scopeBarHtml() {
+    var list = splitsList();
+    if (list.length < 2) return '';
+    var cur = resolveScope(S.scope), val = cur.kind === 'all' ? 'all' : cur.split.id;
+    var ordered = list.slice().sort(function (a, b) { return (b.active ? 1 : 0) - (a.active ? 1 : 0); });
+    var opts = ordered.map(function (sp) {
+      var n = SI.buildCatalog(dataFor({ kind: 'split', split: sp }), opts_()).length;
+      return '<option value="' + esc(sp.id) + '"' + (sp.id === val ? ' selected' : '') + (n ? '' : ' disabled') + '>' + esc(sp.name) + (sp.active ? ' · active' : ' · archived') + (n ? '' : ' (no data)') + '</option>';
+    }).join('') + '<option value="all"' + (val === 'all' ? ' selected' : '') + '>All splits (combined)</option>';
+    return '<div class="si-scopebar"><label class="si-scope" for="si-scope" style="max-width:none">Lifts from</label><select id="si-scope" aria-label="Split" style="width:auto;flex:1;max-width:70%;padding:7px 10px;font-size:13px">' + opts + '</select></div>';
+  }
+  function opts_() { return opts(); }
   function drawShell(o) {
     var cat = catalog();
     var opts = cat.map(function (c) {
@@ -293,7 +338,7 @@ window.StrengthUI = (function () {
       '<div class="si-top"><button class="si-back" id="si-back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
       '<div class="si-title"><div class="si-eyebrow">Stats</div><h2>Strength Intelligence</h2></div>' +
       '<div class="si-unit" role="group" aria-label="Units"><button data-u="kg" class="' + (unit() === 'kg' ? 'active' : '') + '">KG</button><button data-u="lb" class="' + (unit() === 'lb' ? 'active' : '') + '">LB</button></div></div>' +
-      '<div class="si-scroll" id="si-scroll"><div class="si-picker"><select id="si-ex" aria-label="Exercise">' + opts + '</select><div id="si-badge"></div></div>' +
+      '<div class="si-scroll" id="si-scroll">' + scopeBarHtml() + '<div class="si-picker"><select id="si-ex" aria-label="Exercise">' + opts + '</select><div id="si-badge"></div></div>' +
       '<div id="si-hero"></div>' +
       '<div class="segmented si-tabs" id="si-tabs"><button data-t="ask">Ask</button><button data-t="curve">Curve</button><button data-t="trend">Trend</button><button data-t="insights">Insights</button></div>' +
       '<div id="si-pane"></div></div>';
@@ -305,6 +350,19 @@ window.StrengthUI = (function () {
     Array.prototype.forEach.call(o.querySelectorAll('#si-tabs button'), function (b) {
       b.onclick = function () { S.tab = b.getAttribute('data-t'); store.tab = S.tab; saveStore(); renderBody(false); };
     });
+    var sc = $('si-scope');
+    if (sc) sc.onchange = function () {
+      var v = this.value, prev = S.scope, prevKey = S.key;
+      S.scope = v; curScope = v;
+      var cat = catalog();
+      if (!cat.length) { S.scope = prev; curScope = prev; this.value = prev === 'all' ? 'all' : (resolveScope(prev).split || {}).id; return; }
+      // persist only the choices the Stats-tab card can follow: all splits, or the active split
+      var want = v === 'all' ? 'all' : 'active';
+      if (store.scope !== want) { store.scope = want; saveStore(); }
+      S.curveX = null; S.trendSel = null; S.weightKg = null; S.rangeAuto = false; S.range = '30';
+      if (!cat.some(function (c) { return c.key === S.key; })) S.key = cat[0].key;
+      drawShell(o);
+    };
     renderBody(true);
   }
   function changeUnit(u) {
