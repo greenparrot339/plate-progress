@@ -575,6 +575,24 @@
   .split-legend{display:flex;gap:16px;justify-content:center;margin:2px 0 10px;font-size:11.5px;}
   .split-legend span{display:flex;align-items:center;gap:5px;color:var(--text-dim);}
   .split-legend .dot{width:8px;height:8px;border-radius:50%;}
+  .card-title-sub{text-transform:none;letter-spacing:0;color:var(--text-faint);font-size:11px;margin-left:6px;}
+  .split-metric-row .sm-a small,.split-metric-row .sm-b small{display:block;font-size:10px;font-weight:400;color:var(--text-faint);margin-top:1px;}
+  .split-metric-row .sm-a.win{background:rgba(232,179,44,.13);border-radius:6px;padding:3px 0;}
+  .split-metric-row .sm-b.win{background:var(--rust-dim);border-radius:6px;padding:3px 0;}
+  .split-foot{font-size:11.5px;color:var(--text-faint);margin:8px 0 2px;line-height:1.45;}
+  .split-foot.warn{color:var(--rust);}
+  .split-verdict{border-left:3px solid var(--accent);}
+  .split-verdict-text{font-size:13.5px;line-height:1.5;color:var(--text);}
+  .split-verdict-text .va,.split-lift-note .va{color:var(--accent);font-weight:600;}
+  .split-verdict-text .vb,.split-lift-note .vb{color:var(--rust);font-weight:600;}
+  .vnote{color:var(--text-faint);font-size:12px;}
+  .split-lift-note{display:flex;gap:12px;margin-top:10px;font-size:11.5px;color:var(--text-dim);line-height:1.5;}
+  .split-lift-note>div{flex:1;min-width:0;}
+  .split-lift-note.single{display:block;}
+  .split-lift-note .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;}
+  .split-overlap{font-size:13px;color:var(--text-dim);}
+  .split-details{margin-top:8px;}
+  .split-details summary{font-size:12px;color:var(--accent);cursor:pointer;}
   .shared-ex-chip-list,.uniq-ex-chip-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
   .ex-chip{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 10px;font-size:11.5px;color:var(--text-dim);}
 </style>
@@ -3904,31 +3922,76 @@ function setsOfSplit(split){
   const exIds = new Set(exercisesOfSplit(split).map(e=>e.id));
   return DB.sets.filter(s=>exIds.has(s.exerciseId));
 }
-function splitAggregateMetrics(split){
-  const exs = exercisesOfSplit(split);
-  const sets = setsOfSplit(split);
-  const sessions = [...new Set(sets.map(s=>s.date))];
-  const totalVolume = sets.reduce((a,s)=>a+(isWorkingSet(s)?s.weight*s.reps:0),0);
-  const totalSets = sets.filter(isCountedLoggedSet).length;
-  const totalReps = sets.filter(isCountedLoggedSet).reduce((a,s)=>a+(Number(s.reps)||0),0);
-  const avgSessionVolume = sessions.length ? totalVolume/sessions.length : 0;
-  // PR count: exercises where the split's own logged max weight equals that
-  // exercise's all-time max weight (i.e. the PR happened while on this split).
-  let prCount = 0;
-  exs.forEach(ex=>{
-    const exSets = setsOfExercise(ex.id);
-    if(!exSets.length) return;
-    const workingExSets = exSets.filter(isWorkingPerformanceSet);
-    if(!workingExSets.length) return;
-    const allTimeMax = Math.max(...workingExSets.map(s=>s.weight));
-    const splitSets = sets.filter(s=>s.exerciseId===ex.id && isWorkingPerformanceSet(s));
-    if(splitSets.length && Math.max(...splitSets.map(s=>s.weight))>=allTimeMax) prCount++;
-  });
-  const muscleVol = {};
-  sets.forEach(s=>{ const ex=exerciseById(s.exerciseId); if(!ex) return; const g=classifyExercise(ex.name); if(g) muscleVol[g]=(muscleVol[g]||0)+(isWorkingSet(s)?s.weight*s.reps:0); });
-  return { exs, sets, sessions, totalVolume, totalSets, totalReps, avgSessionVolume, prCount, muscleVol,
-    frequency: sessions.length };
+/* ============ PROGRESS › SPLIT COMPARISON ============
+   Goal: answer "which split made me stronger?" fairly.
+   - Everything is normalised per week / per session (a 6-month split must not beat a 3-week one just by being longer).
+   - Strength progress uses estimated 1RM (Strength Intelligence engine) so weight AND reps both count.
+   - The chart lines up both splits by "weeks since the lift started in that split", indexed to 100 at the start. */
+function splitDayNum(d){ return Math.floor(Date.parse(d+'T00:00:00Z')/864e5); }
+function splitSign(v, d){ const n=Number(v); return (n>0?'+':'')+n.toFixed(d==null?1:d); }
+function splitSI(){ return (window.StrengthIntelligence && typeof StrengthIntelligence.getExerciseHistory==='function') ? window.StrengthIntelligence : null; }
+
+// e1RM history of one lift (by identity key) for a given data scope. Anomalous / unusable sessions are dropped.
+function splitLiftSessions(data, key){
+  const SI = splitSI(); if(!SI) return [];
+  try{
+    const h = SI.getExerciseHistory(data, key, {identityKey: exerciseIdentityKey});
+    return (h.sessions||[]).filter(s=>!s.anomalous && s.e1rm!=null);
+  }catch(err){ console.warn('Split lift history failed', err); return []; }
 }
+// Strength gain over a split for one lift: compares the first vs last session(s), returns % and %/week.
+function splitLiftGain(sessions){
+  const n = sessions.length;
+  if(n<3) return null;
+  const k = n>=6 ? 2 : 1;
+  const first = sessions.slice(0,k), last = sessions.slice(-k);
+  const avg = (arr,f)=>arr.reduce((a,x)=>a+f(x),0)/arr.length;
+  const e0 = avg(first,s=>s.e1rm), e1 = avg(last,s=>s.e1rm);
+  const weeks = (avg(last,s=>s.day)-avg(first,s=>s.day))/7;
+  if(!(e0>0) || weeks<1) return null;
+  const pct = (e1/e0-1)*100;
+  return { pct, rate: pct/weeks, weeks, e0, e1, n, baseline:e0 };
+}
+
+function buildSplitReport(split, allHistFor){
+  const exs = exercisesOfSplit(split);
+  const sets = setsOfSplit(split).filter(isCountedLoggedSet);
+  const dates = [...new Set(sets.map(s=>s.date))].sort();
+  const n = dates.length;
+  const spanDays = n ? splitDayNum(dates[n-1])-splitDayNum(dates[0])+1 : 0;
+  const weeks = n ? Math.max(1, spanDays/7) : 0;
+  const perf = sets.filter(isWorkingPerformanceSet);
+  const volume = perf.reduce((a,s)=>a+s.weight*s.reps,0);
+  const workingSets = sets.filter(isWorkingSet).length;
+
+  // per-lift e1RM sessions inside this split (pooled across days by identity key)
+  const data = {exercises: exs, sets: setsOfSplit(split)};
+  const keys = [...new Set(exs.map(e=>exerciseIdentityKey(e.name)).filter(Boolean))];
+  const lifts = new Map();
+  keys.forEach(k=>{ const sessions = splitLiftSessions(data, k); lifts.set(k, {sessions, gain: splitLiftGain(sessions)}); });
+
+  // PRs set during this split: a session whose e1RM beat every earlier session of that lift (any split). First-ever session isn't a PR.
+  let prs = 0;
+  lifts.forEach((L,k)=>{
+    const all = allHistFor(k);
+    L.sessions.forEach(s=>{
+      let prior = null;
+      all.forEach(a=>{ if(a.day < s.day && (prior==null || a.e1rm>prior)) prior = a.e1rm; });
+      if(prior!=null && s.e1rm > prior) prs++;
+    });
+  });
+
+  const muscleVol = {};
+  perf.forEach(s=>{ const ex=exerciseById(s.exerciseId); if(!ex) return; const g=classifyExercise(ex.name); if(g) muscleVol[g]=(muscleVol[g]||0)+s.weight*s.reps; });
+
+  return { split, name: split.name, exs, sets, perf, dates, sessions:n, weeks, volume, workingSets, keys, lifts, prs, muscleVol,
+    sessPerWeek: n>=2 ? n/weeks : null,
+    setsPerSession: n ? workingSets/n : null,
+    volPerSession: n ? volume/n : null,
+    prsPer4: n>=2 ? prs/weeks*4 : null,
+    short: n<3 || weeks<2 };
+}
+
 function renderProgressSplitMode(){
   setHeader('Progress', 'Split comparison', null, null);
   destroyCharts(); // clear any charts left over from another Progress mode
@@ -3947,6 +4010,11 @@ function renderProgressSplitMode(){
   const splitA = splitById(state.progressSplitAId);
   const splitB = splitById(state.progressSplitBId);
 
+  const bindSelectors = ()=>{
+    document.getElementById('p-splitA').onchange = e=>{ state.progressSplitAId=e.target.value; if(state.progressSplitAId===state.progressSplitBId) state.progressSplitBId=null; render(); };
+    document.getElementById('p-splitB').onchange = e=>{ state.progressSplitBId=e.target.value; if(state.progressSplitBId===state.progressSplitAId) state.progressSplitAId=null; render(); };
+  };
+
   html += `<div class="card">
     <div class="card-title">Comparing</div>
     <div class="split-vs-bar">
@@ -3956,118 +4024,238 @@ function renderProgressSplitMode(){
     </div>
   </div>`;
 
-  const mA = splitAggregateMetrics(splitA);
-  const mB = splitAggregateMetrics(splitB);
-  const noData = mA.sets.length===0 && mB.sets.length===0;
+  // all-history e1RM per lift (every split pooled) — only used to decide what counts as a PR
+  const allData = {exercises: DB.exercises, sets: DB.sets};
+  const allCache = new Map();
+  const allHistFor = k=>{ if(!allCache.has(k)) allCache.set(k, splitLiftSessions(allData, k)); return allCache.get(k); };
 
-  if(noData){
+  const rA = buildSplitReport(splitA, allHistFor);
+  const rB = buildSplitReport(splitB, allHistFor);
+
+  if(rA.sets.length===0 && rB.sets.length===0){
     html += `<div class="empty"><p>Neither split has any logged sets yet, so there's nothing to compare.</p></div>`;
-    $main.innerHTML = html; bindProgressModeSwitcher();
-    document.getElementById('p-splitA').onchange = e=>{ state.progressSplitAId=e.target.value; render(); };
-    document.getElementById('p-splitB').onchange = e=>{ state.progressSplitBId=e.target.value; render(); };
+    $main.innerHTML = html; bindProgressModeSwitcher(); bindSelectors();
     return;
   }
 
   const fmtN = n => Math.round(n).toLocaleString();
-  html += `<div class="card">
-    <div class="card-title">Overall metrics</div>
-    <div class="split-legend">
-      <span><span class="dot" style="background:var(--accent);"></span>${esc(splitA.name)}</span>
-      <span><span class="dot" style="background:var(--rust);"></span>${esc(splitB.name)}</span>
-    </div>
-    ${[
-      ['Total volume', fmtN(mA.totalVolume)+'kg', fmtN(mB.totalVolume)+'kg'],
-      ['Total sets', mA.totalSets, mB.totalSets],
-      ['Total reps', mA.totalReps, mB.totalReps],
-      ['Frequency', mA.frequency+' sessions', mB.frequency+' sessions'],
-      ['Avg session vol.', fmtN(mA.avgSessionVolume)+'kg', fmtN(mB.avgSessionVolume)+'kg'],
-      ['PR count', mA.prCount, mB.prCount]
-    ].map(([label,a,b])=>`<div class="split-metric-row"><div class="sm-label">${label}</div><div class="sm-a">${a}</div><div class="sm-b">${b}</div></div>`).join('')}
+  const dash = '&mdash;';
+
+  // ---- shared lifts (same exercise identity in both splits) ----
+  const sharedKeys = rA.keys.filter(k=>rB.keys.includes(k));
+  // fair strength comparison: only lifts with a measurable gain in BOTH splits
+  const gainKeys = sharedKeys.filter(k=>rA.lifts.get(k).gain && rB.lifts.get(k).gain);
+  const median = arr=>{ const a=arr.slice().sort((x,y)=>x-y); const m=a.length>>1; return a.length ? (a.length%2?a[m]:(a[m-1]+a[m])/2) : null; };
+  const gainA = gainKeys.length ? median(gainKeys.map(k=>rA.lifts.get(k).gain.rate)) : null;
+  const gainB = gainKeys.length ? median(gainKeys.map(k=>rB.lifts.get(k).gain.rate)) : null;
+
+  // ---- 1. verdict ----
+  let verdict;
+  if(gainA!=null && gainB!=null){
+    const diff = gainA-gainB;
+    const lifts = `${gainKeys.length} shared lift${gainKeys.length===1?'':'s'}`;
+    if(Math.abs(diff)<0.25){
+      verdict = `<b>Similar strength progress.</b> <span class="va">${esc(rA.name)} ${splitSign(gainA)}%/wk</span> vs <span class="vb">${esc(rB.name)} ${splitSign(gainB)}%/wk</span> across ${lifts}.`;
+    } else {
+      const w = diff>0 ? rA : rB, wv = diff>0 ? gainA : gainB, lv = diff>0 ? gainB : gainA, cls = diff>0?'va':'vb';
+      verdict = `<b><span class="${cls}">${esc(w.name)}</span> made you stronger faster.</b> ${splitSign(wv)}%/wk vs ${splitSign(lv)}%/wk (median e1RM change across ${lifts}).`;
+    }
+    if(gainKeys.length<2) verdict += ` <span class="vnote">Based on a single lift — treat as a hint.</span>`;
+  } else if(!splitSI()){
+    verdict = `<b>Strength comparison unavailable.</b> <span class="vnote">The strength engine did not load.</span>`;
+  } else {
+    verdict = `<b>Not enough shared-lift history yet.</b> <span class="vnote">A strength verdict needs the same lift logged on 3+ days in both splits.</span>`;
+  }
+  html += `<div class="card split-verdict">
+    <div class="card-title">Verdict</div>
+    <div class="split-verdict-text">${verdict}</div>
   </div>`;
 
-  // muscle-group volume comparison
-  const muscleKeysUnion = STATS_GROUPS.filter(g=>mA.muscleVol[g] || mB.muscleVol[g]);
+  // ---- 2. fair, per-week metrics ----
+  const hi = (a,b,tol)=> (a==null||b==null||Math.abs(a-b)<=tol) ? ['',''] : (a>b ? ['win',''] : ['','win']);
+  const row = (label, a, b, win, subA, subB)=>`<div class="split-metric-row"><div class="sm-label">${label}</div>
+      <div class="sm-a ${win[0]}">${a}${subA?`<small>${subA}</small>`:''}</div>
+      <div class="sm-b ${win[1]} ${win[1]?'win-b':''}">${b}${subB?`<small>${subB}</small>`:''}</div></div>`;
+  const f1 = v=> v==null ? dash : (Math.round(v*10)/10).toString();
+  const lenTxt = r=> r.sessions ? (Math.round(r.weeks*10)/10)+' wk' : dash;
   html += `<div class="card">
-    <div class="card-title">Muscle-group volume</div>
-    ${muscleKeysUnion.length ? muscleKeysUnion.map(g=>{
-      const max = Math.max(mA.muscleVol[g]||0, mB.muscleVol[g]||0, 1);
+    <div class="card-title">Per week &amp; per session</div>
+    <div class="split-legend">
+      <span><span class="dot" style="background:var(--accent);"></span>${esc(rA.name)}</span>
+      <span><span class="dot" style="background:var(--rust);"></span>${esc(rB.name)}</span>
+    </div>
+    ${row('Length', lenTxt(rA), lenTxt(rB), ['',''], rA.sessions+' sessions', rB.sessions+' sessions')}
+    ${row('Sessions / wk', f1(rA.sessPerWeek), f1(rB.sessPerWeek), hi(rA.sessPerWeek,rB.sessPerWeek,0.25))}
+    ${row('Sets / session', f1(rA.setsPerSession), f1(rB.setsPerSession), ['',''])}
+    ${row('Volume / session', rA.volPerSession==null?dash:fmtN(rA.volPerSession)+'kg', rB.volPerSession==null?dash:fmtN(rB.volPerSession)+'kg', ['',''])}
+    ${row('Strength gain', gainA==null?dash:splitSign(gainA)+'%/wk', gainB==null?dash:splitSign(gainB)+'%/wk', hi(gainA,gainB,0.25), gainA==null?'':gainKeys.length+' shared lifts', gainB==null?'':gainKeys.length+' shared lifts')}
+    ${row('PRs / 4 wks', f1(rA.prsPer4), f1(rB.prsPer4), hi(rA.prsPer4,rB.prsPer4,0.25), rA.sessions?rA.prs+' total':'', rB.sessions?rB.prs+' total':'')}
+    <p class="split-foot">Per-week numbers remove the advantage of simply running a split for longer. PR = a session whose estimated 1RM beat every earlier session of that lift.</p>
+    ${(rA.short||rB.short) ? `<p class="split-foot warn">${[rA,rB].filter(r=>r.short).map(r=>esc(r.name)).join(' and ')} ${[rA,rB].filter(r=>r.short).length>1?'have':'has'} a short history (under 3 sessions or 2 weeks) — its numbers are rough.</p>` : ''}
+  </div>`;
+
+  // ---- 3. muscle focus: share of volume, shared scale ----
+  const totA = Object.values(rA.muscleVol).reduce((a,b)=>a+b,0), totB = Object.values(rB.muscleVol).reduce((a,b)=>a+b,0);
+  const shareOf = (r,tot,g)=> tot ? (r.muscleVol[g]||0)/tot*100 : 0;
+  const muscleKeys = STATS_GROUPS.filter(g=>rA.muscleVol[g] || rB.muscleVol[g]);
+  let shiftNote = '';
+  if(muscleKeys.length && totA && totB){
+    let best=null;
+    muscleKeys.forEach(g=>{ const d = shareOf(rB,totB,g)-shareOf(rA,totA,g); if(!best || Math.abs(d)>Math.abs(best.d)) best={g,d}; });
+    if(best && Math.abs(best.d)>=3) shiftNote = `<p class="split-foot">Biggest shift: <b>${STATS_LABELS[best.g].toLowerCase()}</b> gets ${Math.abs(Math.round(best.d))} points ${best.d>0?'more':'less'} of your volume in ${esc(rB.name)} than in ${esc(rA.name)}.</p>`;
+  }
+  const maxShare = Math.max(1, ...muscleKeys.map(g=>Math.max(shareOf(rA,totA,g), shareOf(rB,totB,g))));
+  html += `<div class="card">
+    <div class="card-title">Muscle focus <span class="card-title-sub">share of volume</span></div>
+    ${muscleKeys.length ? muscleKeys.map(g=>{
+      const a = shareOf(rA,totA,g), b = shareOf(rB,totB,g);
       return `<div class="muscle-bar-row">
         <div class="mb-label">${STATS_LABELS[g]}</div>
-        <div class="muscle-bar-track"><div class="muscle-bar-fill" style="width:${Math.round((mA.muscleVol[g]||0)/max*100)}%;background:var(--accent);"></div></div>
-        <div class="muscle-bar-val">${fmtN(mA.muscleVol[g]||0)}</div>
+        <div class="muscle-bar-track"><div class="muscle-bar-fill" style="width:${Math.round(a/maxShare*100)}%;background:var(--accent);"></div></div>
+        <div class="muscle-bar-val">${Math.round(a)}%</div>
       </div>
       <div class="muscle-bar-row" style="margin-top:-2px;">
         <div class="mb-label"></div>
-        <div class="muscle-bar-track"><div class="muscle-bar-fill" style="width:${Math.round((mB.muscleVol[g]||0)/max*100)}%;background:var(--rust);"></div></div>
-        <div class="muscle-bar-val">${fmtN(mB.muscleVol[g]||0)}</div>
+        <div class="muscle-bar-track"><div class="muscle-bar-fill" style="width:${Math.round(b/maxShare*100)}%;background:var(--rust);"></div></div>
+        <div class="muscle-bar-val">${Math.round(b)}%</div>
       </div>`;
-    }).join('') : `<p style="font-size:12.5px;color:var(--text-faint);">No classified muscle-group volume to show for either split yet.</p>`}
+    }).join('') + shiftNote : `<p style="font-size:12.5px;color:var(--text-faint);">No classified muscle-group volume to show for either split yet.</p>`}
   </div>`;
 
-  // shared vs split-specific exercises
-  const normNameOf = ex => exerciseIdentityKey(ex.name);
-  const namesA = new Map(); mA.exs.forEach(e=>{ const k=normNameOf(e); if(!namesA.has(k)) namesA.set(k, []); namesA.get(k).push(e); });
-  const namesB = new Map(); mB.exs.forEach(e=>{ const k=normNameOf(e); if(!namesB.has(k)) namesB.set(k, []); namesB.get(k).push(e); });
-  const sharedKeys = [...namesA.keys()].filter(k=>namesB.has(k) && k);
-  const onlyA = [...namesA.keys()].filter(k=>!namesB.has(k) && k).map(k=>namesA.get(k)[0].name);
-  const onlyB = [...namesB.keys()].filter(k=>!namesA.has(k) && k).map(k=>namesB.get(k)[0].name);
+  // ---- 4. progression chart (e1RM index by week  |  weight → reps) ----
+  // Lifts shared by both splits that actually have logged working sets in both, best-populated first.
+  const liftNameOf = (r,k)=>{ const ex = r.exs.find(e=>exerciseIdentityKey(e.name)===k); return ex ? ex.name : k; };
+  const setsOfLift = (r,k)=> r.perf.filter(s=>{ const ex=exerciseById(s.exerciseId); return ex && exerciseIdentityKey(ex.name)===k; });
+  const chartKeys = sharedKeys
+    .map(k=>({k, a:setsOfLift(rA,k), b:setsOfLift(rB,k)}))
+    .filter(x=>x.a.length && x.b.length)
+    .sort((x,y)=> Math.min(y.a.length,y.b.length)-Math.min(x.a.length,x.b.length));
+  const chartKeyList = chartKeys.map(x=>x.k);
+  if(!state.progressSplitSharedKey || !chartKeyList.includes(state.progressSplitSharedKey)) state.progressSplitSharedKey = chartKeyList[0] || null;
+  const view = (state.progressSplitChartView==='wxr' || !splitSI()) ? 'wxr' : 'strength';
 
-  html += `<div class="card">
-    <div class="card-title">Shared vs. split-specific exercises</div>
-    ${sharedKeys.length ? `<p style="font-size:11.5px;color:var(--text-faint);margin-bottom:4px;">Shared (${sharedKeys.length})</p>
-      <div class="shared-ex-chip-list">${sharedKeys.map(k=>`<span class="ex-chip">${esc(namesA.get(k)[0].name)}</span>`).join('')}</div>` : `<p style="font-size:12.5px;color:var(--text-faint);">No shared exercises to compare.</p>`}
-    ${onlyA.length ? `<p style="font-size:11.5px;color:var(--text-faint);margin:10px 0 4px;">Only in ${esc(splitA.name)}</p><div class="uniq-ex-chip-list">${onlyA.map(n=>`<span class="ex-chip">${esc(n)}</span>`).join('')}</div>` : ''}
-    ${onlyB.length ? `<p style="font-size:11.5px;color:var(--text-faint);margin:10px 0 4px;">Only in ${esc(splitB.name)}</p><div class="uniq-ex-chip-list">${onlyB.map(n=>`<span class="ex-chip">${esc(n)}</span>`).join('')}</div>` : ''}
-  </div>`;
+  const exSummary = (r,k)=>{
+    const L = r.lifts.get(k); const g = L && L.gain;
+    const sess = L ? L.sessions.length : 0;
+    if(!g) return `${sess} usable session${sess===1?'':'s'} &middot; <span class="vnote">needs 3+ for a trend</span>`;
+    return `${Math.round(g.e0)} &rarr; ${Math.round(g.e1)} kg e1RM &middot; <b>${splitSign(g.pct)}%</b> (${splitSign(g.rate)}%/wk) &middot; ${sess} sessions`;
+  };
 
-  // same-exercise progression comparison (pick first shared exercise with sets in both, or let user pick)
-  if(!state.progressSplitSharedKey || !sharedKeys.includes(state.progressSplitSharedKey)){
-    state.progressSplitSharedKey = sharedKeys.find(k=> namesA.get(k).some(e=>setsOfExercise(e.id).some(s=>s.date)) ) || sharedKeys[0] || null;
-  }
-  if(sharedKeys.length){
+  if(chartKeyList.length){
+    const k = state.progressSplitSharedKey;
+    const opts = chartKeys.map(x=>`<option value="${esc(x.k)}" ${x.k===k?'selected':''}>${esc(liftNameOf(rA,x.k))} (${x.a.length} / ${x.b.length} sets)</option>`).join('');
     html += `<div class="card">
-      <div class="card-title">Same-exercise progression</div>
-      <select id="p-shared-ex" style="margin-bottom:8px;">
-        ${sharedKeys.map(k=>`<option value="${k}" ${k===state.progressSplitSharedKey?'selected':''}>${esc(namesA.get(k)[0].name)}</option>`).join('')}
-      </select>
-      <div class="chart-wrap"><canvas id="chart-split-shared" role="img" aria-label="Weight progression comparison between the two splits for this exercise">Shared exercise progression chart.</canvas></div>
+      <div class="card-title">Same-lift progression</div>
+      <select id="p-shared-ex" style="margin-bottom:10px;">${opts}</select>
+      <div class="segmented" id="p-split-view">
+        ${splitSI() ? `<button data-v="strength" class="${view==='strength'?'active':''}">Strength by week</button>` : ''}
+        <button data-v="wxr" class="${view==='wxr'?'active':''}">Weight &rarr; reps</button>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-split-shared" role="img" aria-label="Comparison of this lift between the two splits">Shared lift comparison chart.</canvas></div>
+      <p class="split-foot" id="p-split-chart-hint"></p>
       <div id="p-shared-ex-note"></div>
     </div>`;
+  } else {
+    html += `<div class="card"><div class="card-title">Same-lift progression</div>
+      <p style="font-size:12.5px;color:var(--text-faint);">${sharedKeys.length ? 'No shared lift has logged sets in both splits yet.' : 'These splits have no exercise in common, so there is no lift to compare directly.'}</p></div>`;
   }
+
+  // ---- 5. exercise overlap, one line (+ optional detail) ----
+  const nameByKey = (r,k)=>liftNameOf(r,k);
+  const onlyA = rA.keys.filter(k=>!rB.keys.includes(k)), onlyB = rB.keys.filter(k=>!rA.keys.includes(k));
+  html += `<div class="card">
+    <div class="card-title">Exercise overlap</div>
+    <p class="split-overlap"><b>${sharedKeys.length}</b> shared &middot; <b>${onlyA.length}</b> only in ${esc(rA.name)} &middot; <b>${onlyB.length}</b> only in ${esc(rB.name)}</p>
+    ${(sharedKeys.length||onlyA.length||onlyB.length) ? `<details class="split-details"><summary>Show exercises</summary>
+      ${sharedKeys.length?`<p class="split-foot">Shared</p><div class="shared-ex-chip-list">${sharedKeys.map(k=>`<span class="ex-chip">${esc(nameByKey(rA,k))}</span>`).join('')}</div>`:''}
+      ${onlyA.length?`<p class="split-foot">Only in ${esc(rA.name)}</p><div class="uniq-ex-chip-list">${onlyA.map(k=>`<span class="ex-chip">${esc(nameByKey(rA,k))}</span>`).join('')}</div>`:''}
+      ${onlyB.length?`<p class="split-foot">Only in ${esc(rB.name)}</p><div class="uniq-ex-chip-list">${onlyB.map(k=>`<span class="ex-chip">${esc(nameByKey(rB,k))}</span>`).join('')}</div>`:''}
+    </details>` : ''}
+  </div>`;
 
   $main.innerHTML = html;
   bindProgressModeSwitcher();
-  document.getElementById('p-splitA').onchange = e=>{ state.progressSplitAId=e.target.value; if(state.progressSplitAId===state.progressSplitBId) state.progressSplitBId=null; render(); };
-  document.getElementById('p-splitB').onchange = e=>{ state.progressSplitBId=e.target.value; if(state.progressSplitBId===state.progressSplitAId) state.progressSplitAId=null; render(); };
+  bindSelectors();
   const sharedSel = document.getElementById('p-shared-ex');
   if(sharedSel) sharedSel.onchange = e=>{ state.progressSplitSharedKey=e.target.value; render(); };
+  document.querySelectorAll('#p-split-view [data-v]').forEach(b=> b.onclick = ()=>{ state.progressSplitChartView=b.dataset.v; render(); });
 
-  if(sharedKeys.length && state.progressSplitSharedKey){
-    const exsA = namesA.get(state.progressSplitSharedKey) || [];
-    const exsB = namesB.get(state.progressSplitSharedKey) || [];
-    const setsA = exsA.flatMap(e=>setsOfExercise(e.id)).sort((a,b)=>a.date<b.date?-1:1);
-    const setsB = exsB.flatMap(e=>setsOfExercise(e.id)).sort((a,b)=>a.date<b.date?-1:1);
-    const byDateMax = arr=>{ const m={}; arr.forEach(s=>{ m[s.date]=Math.max(m[s.date]||0, s.weight); }); return m; };
-    const mapA = byDateMax(setsA), mapB = byDateMax(setsB);
-    const allDates = [...new Set([...Object.keys(mapA), ...Object.keys(mapB)])].sort();
-    const note = document.getElementById('p-shared-ex-note');
-    if(!allDates.length){
-      if(note) note.innerHTML = `<p style="font-size:12.5px;color:var(--text-faint);margin-top:8px;">No logged sets for this exercise in either split yet.</p>`;
+  if(!chartKeyList.length) return;
+  const key = state.progressSplitSharedKey;
+  const liftName = liftNameOf(rA,key);
+  const note = document.getElementById('p-shared-ex-note');
+  const hint = document.getElementById('p-split-chart-hint');
+  const cOpts = (xTitle, yTitle, extra)=>({ responsive:true, maintainAspectRatio:false,
+    interaction:{ mode:'index', intersect:false },
+    plugins:{ legend:{display:true, labels:{color:'#9A9FA6',font:{size:10.5}}}, tooltip: extra },
+    scales:{ x:{ title:{display:true,text:xTitle,color:'#9A9FA6',font:{size:11}}, ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'} },
+             y:{ title:{display:true,text:yTitle,color:'#9A9FA6',font:{size:11}}, ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'} } } });
+  const ds = (label, data, color, fill, raw)=>({ label, data, raw, borderColor:color, backgroundColor:fill, borderWidth:2, pointRadius:3, pointHoverRadius:5, spanGaps:true, tension:0.25 });
+
+  if(view==='strength'){
+    // x = weeks since this lift started in THAT split, y = e1RM indexed to 100 at the start
+    const build = r=>{
+      const L = r.lifts.get(key); const ss = L ? L.sessions : [];
+      if(!ss.length) return {pts:[], base:null};
+      const k0 = ss.length>=6 ? 2 : 1;
+      const base = ss.slice(0,k0).reduce((a,s)=>a+s.e1rm,0)/k0;
+      const day0 = ss[0].day;
+      const byWeek = {};
+      ss.forEach(s=>{ const w=Math.floor((s.day-day0)/7); (byWeek[w]=byWeek[w]||[]).push(s.e1rm); });
+      return {pts: byWeek, base};
+    };
+    const bA = build(rA), bB = build(rB);
+    const maxW = Math.max(-1, ...Object.keys(bA.pts).map(Number), ...Object.keys(bB.pts).map(Number));
+    const weeks = Array.from({length:maxW+1}, (_,i)=>i);
+    const line = b=>({
+      idx: weeks.map(w=> b.pts[w] ? Math.round(b.pts[w].reduce((a,x)=>a+x,0)/b.pts[w].length/b.base*1000)/10 : null),
+      raw: weeks.map(w=> b.pts[w] ? Math.round(b.pts[w].reduce((a,x)=>a+x,0)/b.pts[w].length*10)/10 : null)
+    });
+    const lA = line(bA), lB = line(bB);
+    if(maxW<0 || (lA.idx.filter(v=>v!=null).length<2 && lB.idx.filter(v=>v!=null).length<2)){
+      note.innerHTML = `<p style="font-size:12.5px;color:var(--text-faint);margin-top:8px;">Not enough sessions of this lift yet for a strength curve — switch to Weight &rarr; reps.</p>`;
     } else {
-      destroyCharts();
       charts.splitShared = new Chart(document.getElementById('chart-split-shared'), {
         type:'line',
-        data:{ labels: allDates.map(fmtDate), datasets:[
-          { label:esc(splitA.name), data: allDates.map(d=>mapA[d] ?? null), borderColor:'#E8B32C', backgroundColor:'rgba(232,179,44,0.1)', borderWidth:2, pointRadius:3, spanGaps:true, tension:0.25 },
-          { label:esc(splitB.name), data: allDates.map(d=>mapB[d] ?? null), borderColor:'#C1543A', backgroundColor:'rgba(193,84,58,0.1)', borderWidth:2, pointRadius:3, spanGaps:true, tension:0.25 }
-        ]},
-        options:{ responsive:true, maintainAspectRatio:false,
-          interaction:{ mode:'index', intersect:false },
-          plugins:{ legend:{display:true, labels:{color:'#9A9FA6',font:{size:10.5}}}, tooltip:{mode:'index',intersect:false} },
-          scales:{ x:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'} },
-                   y:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'}, title:{display:true,text:'Weight (kg)',color:'#9A9FA6',font:{size:11}} } } }
+        data:{ labels: weeks.map(w=>'Wk '+(w+1)), datasets:[
+          ds(esc(rA.name), lA.idx, '#E8B32C', 'rgba(232,179,44,0.1)', lA.raw),
+          ds(esc(rB.name), lB.idx, '#C1543A', 'rgba(193,84,58,0.1)', lB.raw) ]},
+        options: cOpts('Weeks since this lift started in each split', 'Strength index (start = 100)', {
+          callbacks:{ label:c=> c.parsed.y==null ? '' : `${c.dataset.label}: ${c.parsed.y}  (${(c.dataset.raw||[])[c.dataIndex]} kg e1RM)` } })
       });
-      maxifyChart(charts.splitShared, {title:'Shared exercise — top weight by split', yName:'Weight', yUnit:' kg'});
+      maxifyChart(charts.splitShared, {title:liftName+' — strength index by week', yName:'Strength index', yUnit:''});
+      hint.innerHTML = `Each line starts at 100 so a stronger starting point doesn&rsquo;t hide the pace of progress. Estimated 1RM combines weight and reps.`;
+    }
+    note.innerHTML = `<div class="split-lift-note"><div><span class="dot" style="background:var(--accent);"></span><b>${esc(rA.name)}</b><br>${exSummary(rA,key)}</div>
+      <div><span class="dot" style="background:var(--rust);"></span><b>${esc(rB.name)}</b><br>${exSummary(rB,key)}</div></div>` + note.innerHTML;
+  } else {
+    // weight -> average reps at that weight, one line per split
+    const avgAt = sets=>{ const m={}; sets.forEach(s=>{ (m[s.weight]=m[s.weight]||[]).push(s.reps); }); return m; };
+    const sA = setsOfLift(rA,key), sB = setsOfLift(rB,key);
+    const mA = avgAt(sA), mB = avgAt(sB);
+    const wts = [...new Set([...Object.keys(mA), ...Object.keys(mB)].map(Number))].sort((a,b)=>a-b);
+    const mean = a=>a.reduce((x,y)=>x+y,0)/a.length;
+    charts.splitShared = new Chart(document.getElementById('chart-split-shared'), {
+      type:'line',
+      data:{ labels: wts.map(w=>String(Math.round(w*100)/100)), datasets:[
+        ds(esc(rA.name), wts.map(w=> mA[w] ? Math.round(mean(mA[w])*10)/10 : null), '#E8B32C', 'rgba(232,179,44,0.1)', wts.map(w=> mA[w] ? mA[w].length : 0)),
+        ds(esc(rB.name), wts.map(w=> mB[w] ? Math.round(mean(mB[w])*10)/10 : null), '#C1543A', 'rgba(193,84,58,0.1)', wts.map(w=> mB[w] ? mB[w].length : 0)) ]},
+      options: cOpts('Weight (kg)', 'Average reps', {
+        callbacks:{ title:items=> items.length ? items[0].label+' kg' : '', label:c=> c.parsed.y==null ? '' : `${c.dataset.label}: ${c.parsed.y} reps (${c.dataset.raw[c.dataIndex]} set${c.dataset.raw[c.dataIndex]===1?'':'s'})` } })
+    });
+    maxifyChart(charts.splitShared, {title:liftName+' — average reps at each weight', xName:'Weight', xUnit:' kg', yName:'Avg reps', yUnit:''});
+    hint.innerHTML = `Higher is better at the same weight. Gaps mean that split never used that load.`;
+
+    // headline: heaviest weight both splits actually trained
+    const common = wts.filter(w=>mA[w] && mB[w]);
+    const strong = common.filter(w=>mA[w].length>=2 && mB[w].length>=2);
+    const pick = (strong.length?strong:common).slice(-1)[0];
+    if(pick!=null){
+      const a = mean(mA[pick]), b = mean(mB[pick]);
+      const d = a-b;
+      note.innerHTML = `<div class="split-lift-note single"><div>At <b>${Math.round(pick*100)/100} kg</b> (heaviest load both splits used): <span class="va">${esc(rA.name)} ${a.toFixed(1)} reps</span> vs <span class="vb">${esc(rB.name)} ${b.toFixed(1)} reps</span>${Math.abs(d)>=0.5?` &mdash; <b>${d>0?esc(rA.name):esc(rB.name)}</b> ahead by ${Math.abs(d).toFixed(1)}`:' &mdash; about the same'}.</div></div>`;
+    } else {
+      note.innerHTML = `<p style="font-size:12.5px;color:var(--text-faint);margin-top:8px;">The two splits never used the same weight for this lift, so reps can&rsquo;t be compared directly. Try Strength by week.</p>`;
     }
   }
 }
