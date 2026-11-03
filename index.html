@@ -593,6 +593,15 @@
   .split-overlap{font-size:13px;color:var(--text-dim);}
   .split-details{margin-top:8px;}
   .split-details summary{font-size:12px;color:var(--accent);cursor:pointer;}
+  .day-ex-summary{font-size:12px;margin:2px 0 8px;font-family:var(--font-mono);}
+  .day-ex-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--border);}
+  .day-ex-main{flex:1;min-width:0;}
+  .day-ex-name{font-size:13.5px;font-weight:600;}
+  .day-ex-sets{font-family:var(--font-mono);font-size:12px;color:var(--text);margin-top:2px;}
+  .day-ex-prev{font-size:11px;color:var(--text-faint);margin-top:2px;}
+  .day-ex-delta{display:flex;flex-direction:column;align-items:center;min-width:54px;font-family:var(--font-mono);font-size:12px;color:var(--text-dim);}
+  .day-ex-delta span{font-size:16px;line-height:1;}
+  .pr-badge{font-size:9.5px;background:var(--accent);color:#121417;border-radius:4px;padding:1px 5px;vertical-align:middle;font-weight:700;letter-spacing:.04em;}
   .shared-ex-chip-list,.uniq-ex-chip-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
   .ex-chip{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 10px;font-size:11.5px;color:var(--text-dim);}
 </style>
@@ -644,7 +653,7 @@
 <script>
 /* ============ STATE ============ */
 let DB = { splits: [], exercises: [], sets: [], exerciseClassificationOverrides: {}, exerciseDatabase: null };
-let state = { tab:'log', logDayId:null, logExerciseId:null, logDate:null, logHistoryDate:null, logHistoryOpen:false, splitEditId:null, splitViewId:null, splitViewMode:'list', splitGalleryDayIndex:0, progressSplitId:null, progressExerciseId:null, progressMetric:'weight', progressMode:'exercise', progressDaySessionDate:null, progressSplitAId:null, progressSplitBId:null, progressSplitSharedKey:null, statsRange:'week', statsSelectedGroup:null, stats3dFullscreen:false, stats3dGraphMode:'week', logRenameMode:false };
+let state = { tab:'log', logDayId:null, logExerciseId:null, logDate:null, logHistoryDate:null, logHistoryOpen:false, splitEditId:null, splitViewId:null, splitViewMode:'list', splitGalleryDayIndex:0, progressSplitId:null, progressExerciseId:null, progressMetric:'e1rm', progressRange:'all', progressDayId:null, progressMode:'exercise', progressDaySessionDate:null, progressSplitAId:null, progressSplitBId:null, progressSplitSharedKey:null, statsRange:'week', statsSelectedGroup:null, stats3dFullscreen:false, stats3dGraphMode:'week', logRenameMode:false };
 let DB_META = { lastAutoAssignDate:null };
 let charts = {};
 const $main = document.getElementById('main');
@@ -3344,6 +3353,10 @@ function renderProgressExerciseMode(){
     return true;
   });
 
+  // most recently trained first (never-trained last), so the lift you just did is at the top of the list
+  const lastTrainedMap = new Map(exList.map(e=>{ const ss=setsOfExercise(e.id); return [e.id, ss.length ? ss[ss.length-1].date : '']; }));
+  exList.sort((a,b)=> (lastTrainedMap.get(b.id)||'').localeCompare(lastTrainedMap.get(a.id)||''));
+
   let html = buildProgressModeSwitcherHtml();
 
   html += `<div class="card">
@@ -3362,12 +3375,13 @@ function renderProgressExerciseMode(){
   }
 
   if(!state.progressExerciseId || !exList.some(e=>e.id===state.progressExerciseId)){
-    const withSets = exList.find(e=> setsOfExercise(e.id).length>0);
+    const withSets = exList.find(e=> setsOfExercise(e.id).some(isWorkingPerformanceSet)) || exList.find(e=> setsOfExercise(e.id).length>0);
     state.progressExerciseId = (withSets||exList[0]).id;
   }
 
   html += `<div class="card">
-    <div class="card-title">Exercise</div>
+    <div class="card-title">Exercise${exList.length>8?` <span class="card-title-sub">${exList.length} lifts &middot; recent first</span>`:''}</div>
+    ${exList.length>8?`<input id="p-ex-search" type="search" placeholder="Search exercises" autocomplete="off" style="margin-bottom:8px;">`:''}
     <select id="p-exercise">
       ${exList.map(e=>`<option value="${e.id}" ${e.id===state.progressExerciseId?'selected':''}>${esc(e.name)}${e.archived?' (archived)':''}</option>`).join('')}
     </select>
@@ -3376,7 +3390,8 @@ function renderProgressExerciseMode(){
   const sets = setsOfExercise(state.progressExerciseId).filter(isWorkingPerformanceSet);
 
   if(sets.length===0){
-    html += `<div class="empty"><p>No sets logged for this exercise yet — log one from the Log tab.</p></div>`;
+    const bwOnly = setsOfExercise(state.progressExerciseId).some(s=>isWorkingSet(s) && Number(s.reps)>0);
+    html += `<div class="empty"><p>${bwOnly ? 'This exercise only has bodyweight sets (no weight logged), so it can&rsquo;t be charted by load here. Its reps still show up in the Day view.' : 'No sets logged for this exercise yet — log one from the Log tab.'}</p></div>`;
     $main.innerHTML = html;
     bindProgressModeSwitcher();
     bindProgressSelectors();
@@ -3597,6 +3612,28 @@ function renderProgressExerciseMode(){
   }
   const overload = buildProgressiveOverloadTrend(sets);
 
+  // ---- estimated-1RM view of this lift (weight AND reps in one number) ----
+  const ex0 = exerciseById(state.progressExerciseId);
+  const e1s = e1rmSessions(ex0);
+  const hasE1 = e1s.length>=2;
+  const metric = (state.progressMetric==='e1rm' && !hasE1) ? 'weight' : state.progressMetric;
+  const bestE1 = e1s.length ? e1s.reduce((b,x)=>x.e1rm>b.e1rm?x:b, e1s[0]) : null;
+  const pctClass = v => v>PROGRESS_FLAT_PCT ? 'trend-up' : v<-PROGRESS_FLAT_PCT ? 'trend-down' : '';
+  let e1TrendHtml = '';
+  if(e1s.length>=2){
+    const a=e1s[e1s.length-1], b=e1s[e1s.length-2], pct=(a.e1rm/b.e1rm-1)*100;
+    e1TrendHtml = Math.abs(pct)<=PROGRESS_FLAT_PCT ? `<span style="color:var(--text-dim);">&rarr; same</span> est. 1RM` : `<span class="${pctClass(pct)}">${pct>0?'&uarr;':'&darr;'} ${fmtSignedPct(pct)}</span> est. 1RM`;
+  }
+  // latest e1RM vs the median of the previous (up to) 4 sessions — a read that works even when weights keep changing
+  let strengthLine = '';
+  if(e1s.length>=3){
+    const latest = e1s[e1s.length-1];
+    const base = median4(e1s.slice(-5,-1).map(x=>x.e1rm));
+    const pct = (latest.e1rm/base-1)*100;
+    const word = pct>PROGRESS_FLAT_PCT ? 'above' : pct<-PROGRESS_FLAT_PCT ? 'below' : 'in line with';
+    strengthLine = `<div class="overload-note-meta" style="margin-top:6px;">Strength (est. 1RM): ~${Math.round(latest.e1rm)} kg &mdash; <span class="${pctClass(pct)}">${fmtSignedPct(pct)}</span> ${word} your previous ${Math.min(4,e1s.length-1)}-session level (${Math.round(base)} kg).</div>`;
+  }
+
   html += `<div class="card">
     <div class="card-title">Snapshot</div>
     <div class="stat-grid">
@@ -3610,16 +3647,22 @@ function renderProgressExerciseMode(){
         <div class="value">${Math.round(totalVolume).toLocaleString()}<span class="unit">kg</span></div>
         <div class="sub">across ${sessionCount} session${sessionCount===1?'':'s'}</div>
       </div>
-      <div class="stat-tile">
+      ${bestE1 ? `<div class="stat-tile">
+        <div class="label">Best est. 1RM</div>
+        <div class="value">${Math.round(bestE1.e1rm)}<span class="unit">kg</span></div>
+        <div class="sub">${bestE1.set?fmtKg(bestE1.set.weight)+' &times; '+bestE1.set.reps+' &middot; ':''}${fmtDate(bestE1.date)}</div>
+      </div>` : `<div class="stat-tile">
         <div class="label">Avg reps / set</div>
         <div class="value">${avgReps}</div>
         <div class="sub">${sets.length} sets logged</div>
-      </div>
+      </div>`}
       <div class="stat-tile">
         <div class="label">Trend</div>
-        <div class="value" style="font-size:14px;">${trendHtml || '&mdash;'}</div>
+        <div class="value" style="font-size:14px;">${e1TrendHtml || trendHtml || '&mdash;'}</div>
+        <div class="sub">vs last session</div>
       </div>
     </div>
+    ${(progressSI() && window.StrengthUI && !split.archivedAt && ex0 && !ex0.archived && e1s.length>=2) ? `<button class="btn" id="p-open-si" style="width:100%;margin-top:10px;">Full strength analysis &rsaquo;</button>` : ''}
   </div>`;
 
   // ---- progressive overload ----
@@ -3638,22 +3681,27 @@ function renderProgressExerciseMode(){
     </div>` : ''}
     ${overload.status==='watch' ? `<div class="overload-progress"><span style="width:${Math.min(100,((overload.followups||0)/3)*100)}%"></span></div>` : ''}
     <div class="overload-note">${String(overload.note||'').split('|').map((part,i)=>i===0 ? `<div class="overload-note-main">${part}</div>` : `<div class="overload-note-meta">${part}</div>`).join('')}</div>
+    ${strengthLine}
   </div>`;
 
   // ---- metric toggle + line chart (top weight & volume per session) ----
   html += `<div class="card">
     <div class="card-title">Session trend</div>
     <div class="segmented" id="p-metric">
-      <button data-m="weight" class="${state.progressMetric==='weight'?'active':''}">Top weight</button>
-      <button data-m="volume" class="${state.progressMetric==='volume'?'active':''}">Volume</button>
-      <button data-m="reps" class="${state.progressMetric==='reps'?'active':''}">Avg reps</button>
+      ${hasE1?`<button data-m="e1rm" class="${metric==='e1rm'?'active':''}">Est. 1RM</button>`:''}
+      <button data-m="weight" class="${metric==='weight'?'active':''}">Top weight</button>
+      <button data-m="volume" class="${metric==='volume'?'active':''}">Volume</button>
+      <button data-m="reps" class="${metric==='reps'?'active':''}">Avg reps</button>
     </div>
-    <div class="chart-wrap"><canvas id="chart-line" role="img" aria-label="Line chart of ${state.progressMetric} over time for ${esc(exList.find(e=>e.id===state.progressExerciseId).name)}">Session trend chart.</canvas></div>
+    ${sessionDates.length>=3?`<div class="segmented" id="p-range" style="margin-top:-6px;">
+      ${[['30','1M'],['90','3M'],['180','6M'],['all','All']].map(([v,l])=>`<button data-r="${v}" class="${state.progressRange===v?'active':''}">${l}</button>`).join('')}
+    </div>`:''}
+    <div class="chart-wrap"><canvas id="chart-line" role="img" aria-label="Line chart of ${metric} over time for ${esc(exList.find(e=>e.id===state.progressExerciseId).name)}">Session trend chart.</canvas></div>
   </div>`;
 
   // ---- scatter weight vs reps ----
   html += `<div class="card">
-    <div class="card-title">Weight vs reps (every set)</div>
+    <div class="card-title">Weight vs reps (every set) <span class="card-title-sub">recent = brighter</span></div>
     <div class="chart-wrap"><canvas id="chart-scatter" role="img" aria-label="Scatter plot of weight versus reps for every logged set">Weight vs reps scatter plot.</canvas></div>
   </div>`;
 
@@ -3668,43 +3716,112 @@ function renderProgressExerciseMode(){
     </div>`;
   }
 
+  // ---- personal records (estimated-1RM bests) ----
+  if(e1s.length>=2){
+    const prDates = prSessionDates(e1s);
+    const prList = prDates.slice(-6).reverse().map(d=>{
+      const i = e1s.findIndex(x=>x.date===d); const cur = e1s[i];
+      const before = Math.max(...e1s.slice(0,i).map(x=>x.e1rm));
+      return {d, cur, gain:(cur.e1rm/before-1)*100};
+    });
+    const latestDay = dayNumOfDate(e1s[e1s.length-1].date);
+    const refDate = prDates.length ? prDates[prDates.length-1] : e1s[0].date;
+    const wk = Math.floor((latestDay-dayNumOfDate(refDate))/7);
+    let plateau = '';
+    if(e1s.length>=4){
+      plateau = wk>=6
+        ? `No new estimated best for ${wk} weeks before your latest session &mdash; a plateau. Common fixes: a lighter deload week, or changing the rep range.`
+        : (prDates.length ? `Last PR was ${wk<1?'in the same week as':wk+' week'+(wk===1?'':'s')+' before'} your latest session.` : '');
+    }
+    html += `<div class="card">
+      <div class="card-title">Personal records <span class="card-title-sub">estimated 1RM</span></div>
+      ${prList.length ? prList.map(r=>`<div class="compare-row"><span class="cr-label">${fmtDate(r.d)}</span><span class="cr-val" style="font-size:13px;">${r.cur.set?fmtKg(r.cur.set.weight)+' &times; '+r.cur.set.reps+' &middot; ':''}~${Math.round(r.cur.e1rm)}kg <span class="trend-up" style="font-size:11px;">${fmtSignedPct(r.gain)}</span></span></div>`).join('') : `<p style="font-size:12.5px;color:var(--text-faint);">No PR yet &mdash; a PR is a session whose estimated 1RM beats every earlier session.</p>`}
+      ${plateau?`<p class="split-foot${wk>=6?' warn':''}">${plateau}</p>`:''}
+    </div>`;
+  }
+
+  // ---- best reps at each weight ----
+  const bestAtW = {};
+  sets.forEach(s=>{ const w=s.weight; if(!bestAtW[w] || s.reps>=bestAtW[w].reps) bestAtW[w]={reps:s.reps, date:s.date, n:0}; });
+  sets.forEach(s=>{ bestAtW[s.weight].n++; });
+  const bestWeights = Object.keys(bestAtW).map(Number).sort((a,b)=>b-a).slice(0,6);
+  if(bestWeights.length>=2){
+    html += `<div class="card">
+      <div class="card-title">Best reps at each weight <span class="card-title-sub">heaviest first</span></div>
+      ${bestWeights.map(w=>`<div class="compare-row"><span class="cr-label">${fmtKg(w)} kg</span><span class="cr-val" style="font-size:13px;">${bestAtW[w].reps} reps <span style="font-size:11px;color:var(--text-faint);">&middot; ${fmtDate(bestAtW[w].date)} &middot; ${bestAtW[w].n} set${bestAtW[w].n===1?'':'s'}</span></span></div>`).join('')}
+    </div>`;
+  }
+
+  // ---- recent sessions, set by set ----
+  const e1ByDateMap = {}; e1s.forEach(x=>{ e1ByDateMap[x.date]=x; });
+  html += `<div class="card">
+    <div class="card-title">Recent sessions</div>
+    ${sessionDates.slice(-6).reverse().map(d=>`<div class="compare-row" style="align-items:flex-start;"><span class="cr-label">${fmtDate(d)}</span><span class="cr-val" style="font-size:12.5px;text-align:right;line-height:1.5;">${setsLabel(sessionsMap[d])}${e1ByDateMap[d]?`<br><span style="font-size:10.5px;color:var(--text-faint);">~${Math.round(e1ByDateMap[d].e1rm)}kg est. 1RM</span>`:''}</span></div>`).join('')}
+  </div>`;
+
   $main.innerHTML = html;
   bindProgressModeSwitcher();
   bindProgressSelectors();
 
+  const searchBox = document.getElementById('p-ex-search');
+  if(searchBox) searchBox.oninput = ()=>{
+    const q = searchBox.value.trim().toLowerCase(); const sel = document.getElementById('p-exercise');
+    const keep = sel.value;
+    sel.innerHTML = exList.filter(e=>!q || e.name.toLowerCase().includes(q) || e.id===keep).map(e=>`<option value="${e.id}" ${e.id===keep?'selected':''}>${esc(e.name)}${e.archived?' (archived)':''}</option>`).join('');
+  };
+  const siBtn = document.getElementById('p-open-si');
+  if(siBtn) siBtn.onclick = ()=>{
+    try{
+      // the Strength dashboard needs its data hooks; set them without drawing the Stats card
+      StrengthUI.mountCard(document.createElement('div'), {getData:()=>DB, getSplits:()=>DB.splits.map(sp=>({id:sp.id, name:sp.name, active:!sp.archivedAt, dayIds:[...(sp.dayIds||[]), ...(sp.days||[]).map(d=>d.id)]})), identityKey:exerciseIdentityKey, idbGet, idbSet});
+      StrengthUI.open(exerciseIdentityKey(ex0.name));
+    }catch(err){ console.warn('Strength dashboard unavailable', err); toast('Strength analysis unavailable'); }
+  };
+  document.querySelectorAll('#p-range button').forEach(b=> b.onclick = ()=>{ state.progressRange=b.dataset.r; renderProgress(); });
+
   document.querySelectorAll('#p-metric button').forEach(b=> b.onclick = ()=>{ state.progressMetric=b.dataset.m; renderProgress(); });
 
   // build datasets
-  const sessionRows = sessionDates.map(d=>{
+  const e1ByDate = {}; e1s.forEach(x=>{ e1ByDate[x.date]=x; });
+  let sessionRows = sessionDates.map(d=>{
     const daySets = sessionsMap[d];
     const workingSets = daySets.filter(isWorkingPerformanceSet);
     return {
       date:d,
       topWeight: workingSets.length ? Math.max(...workingSets.map(s=>Number(s.weight)||0)) : 0,
       volume: workingSets.reduce((a,s)=>a+(Number(s.weight)||0)*(Number(s.reps)||0),0),
-      avgReps: workingSets.length ? +(workingSets.reduce((a,s)=>a+(Number(s.reps)||0),0)/workingSets.length).toFixed(1) : 0
+      avgReps: workingSets.length ? +(workingSets.reduce((a,s)=>a+(Number(s.reps)||0),0)/workingSets.length).toFixed(1) : 0,
+      e1rm: e1ByDate[d] ? Math.round(e1ByDate[d].e1rm*10)/10 : null
     };
   });
-  const metricKey = state.progressMetric==='weight'?'topWeight':state.progressMetric==='volume'?'volume':'avgReps';
-  const metricLabel = state.progressMetric==='weight'?'Top weight (kg)':state.progressMetric==='volume'?'Volume (kg)':'Avg reps';
+  if(state.progressRange!=='all' && sessionRows.length>=3){
+    const lim = dayNumOfDate(sessionRows[sessionRows.length-1].date) - Number(state.progressRange);
+    const inRange = sessionRows.filter(r=>dayNumOfDate(r.date)>=lim);
+    if(inRange.length>=2) sessionRows = inRange;   // too few points in the window: keep everything rather than draw an empty chart
+  }
+  const metricKey = metric==='e1rm'?'e1rm':metric==='weight'?'topWeight':metric==='volume'?'volume':'avgReps';
+  const metricLabel = metric==='e1rm'?'Est. 1RM (kg)':metric==='weight'?'Top weight (kg)':metric==='volume'?'Volume (kg)':'Avg reps';
+  const zeroBase = metric==='volume' || metric==='reps';   // weight / 1RM lines must NOT start at zero or a 2.5 kg gain looks flat
 
   destroyCharts();
   charts.line = new Chart(document.getElementById('chart-line'), {
     type:'line',
     data:{ labels: sessionRows.map(r=>fmtDate(r.date)),
       datasets:[{ label:metricLabel, data: sessionRows.map(r=>r[metricKey]), borderColor:'#E8B32C', backgroundColor:'rgba(232,179,44,0.1)',
-        borderWidth:2, pointRadius:4, pointBackgroundColor:'#E8B32C', pointBorderColor:'#1B1E23', pointBorderWidth:2, fill:true, tension:0.25 }]},
+        borderWidth:2, pointRadius:4, pointBackgroundColor:'#E8B32C', pointBorderColor:'#1B1E23', pointBorderWidth:2, fill:zeroBase, tension:0.25, spanGaps:true }]},
     options:{ responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{display:false} },
       scales:{ x:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'} },
-               y:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'}, beginAtZero:true } } }
+               y:{ ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'}, beginAtZero:zeroBase, grace: zeroBase ? 0 : '12%' } } }
   });
 
-  maxifyChart(charts.line, {title:'Progress — '+metricLabel, yName:metricLabel, yUnit: state.progressMetric==='reps'?'':' kg'});
+  maxifyChart(charts.line, {title:'Progress — '+metricLabel, yName:metricLabel, yUnit: metric==='reps'?'':' kg'});
   charts.scatter = new Chart(document.getElementById('chart-scatter'), {
     type:'scatter',
-    data:{ datasets:[{ label:'Sets', data: sets.map(s=>({x:s.weight,y:s.reps,d:s.date})), backgroundColor:'#C1543A', borderColor:'#C1543A',
-      pointRadius:5, pointHoverRadius:6 }]},
+    data:{ datasets:[{ label:'Sets', data: sets.map(s=>({x:s.weight,y:s.reps,d:s.date})),
+      // older sets fade to grey, recent sets glow accent — so you can see whether you're moving up and to the right over time
+      backgroundColor: sets.map((s,i)=>{ const t = sets.length>1 ? i/(sets.length-1) : 1; const m=(a,b)=>Math.round(a+(b-a)*t); return `rgba(${m(93,232)},${m(99,179)},${m(107,44)},${(0.45+0.55*t).toFixed(2)})`; }),
+      borderColor:'rgba(0,0,0,0)', pointRadius:5, pointHoverRadius:6 }]},
     options:{ responsive:true, maintainAspectRatio:false, layout:{padding:12},
       plugins:{ legend:{display:false} },
       scales:{ x:{ title:{display:true,text:'Weight (kg)',color:'#9A9FA6',font:{size:11}}, ticks:{color:'#9A9FA6',font:{size:10.5}}, grid:{color:'#2E333A'} },
@@ -3738,153 +3855,236 @@ function progressScoreRingSvg(pct){
       stroke-dasharray="${c}" stroke-dashoffset="${off}"/>
   </svg>`;
 }
+/* ============ SHARED e1RM HELPERS (Progress › Exercise + Day) ============
+   One estimated-1RM number per session folds weight AND reps together, so a heavier-but-fewer-reps
+   session and a lighter-but-more-reps session can be compared (load progression and rep progression
+   both drive adaptation — see sources in the change notes). Uses the Strength Intelligence engine when
+   present (blended Epley/Brzycki/Lombardi, rep-range weighted, typo-filtered), else plain Epley. */
+const PROGRESS_FLAT_PCT = 1.5; // changes smaller than this are treated as "same" (session-to-session noise is ~1% even in controlled testing)
+function progressSI(){ return (window.StrengthIntelligence && typeof StrengthIntelligence.getExerciseHistory==='function') ? window.StrengthIntelligence : null; }
+function pooledLiftData(ex){
+  const ids = new Set(matchingExerciseIds(ex));
+  return { exercises: DB.exercises.filter(e=>ids.has(e.id)), sets: DB.sets.filter(s=>ids.has(s.exerciseId)) };
+}
+function dayNumOfDate(d){ return Math.floor(Date.parse(d+'T00:00:00Z')/864e5); }
+// Sessions (one per date) with an e1RM, oldest -> newest. Each: {date, day, e1rm, set:{weight,reps}}
+function e1rmSessions(ex){
+  if(!ex) return [];
+  const data = pooledLiftData(ex);
+  const SI = progressSI();
+  if(SI){
+    try{
+      const h = SI.getExerciseHistory(data, exerciseIdentityKey(ex.name), {identityKey: exerciseIdentityKey});
+      return (h.sessions||[]).filter(s=>!s.anomalous && s.e1rm!=null).map(s=>({date:s.date, day:s.day, e1rm:s.e1rm, set: s.e1rmSet ? {weight:s.e1rmSet.weight, reps:s.e1rmSet.reps} : null}));
+    }catch(err){ console.warn('e1RM engine failed, using fallback', err); }
+  }
+  const byDate = {};
+  data.sets.filter(isWorkingPerformanceSet).forEach(s=>{ (byDate[s.date]=byDate[s.date]||[]).push(s); });
+  return Object.keys(byDate).sort().map(date=>{
+    const ss = byDate[date]; const pool = ss.some(s=>s.reps<=12) ? ss.filter(s=>s.reps<=12) : ss;
+    let best = pool[0]; pool.forEach(s=>{ if(s.weight*(1+s.reps/30) > best.weight*(1+best.reps/30)) best = s; });
+    return {date, day:dayNumOfDate(date), e1rm: best.weight*(1+best.reps/30), set:{weight:best.weight, reps:best.reps}};
+  });
+}
+function fmtKg(v){ return (Math.round(v*10)/10).toString(); }
+function fmtSignedPct(v){ return (v>0?'+':'')+(Math.round(v*10)/10)+'%'; }
+// A session is a PR when its e1RM is strictly higher than every EARLIER session. First-ever session is a baseline, not a PR.
+function prSessionDates(sessions){
+  const out = []; let run = null;
+  sessions.forEach((s,i)=>{ if(i>0 && run!=null && s.e1rm>run) out.push(s.date); if(run==null || s.e1rm>run) run = s.e1rm; });
+  return out;
+}
+function setsLabel(sets){
+  // "60 × 8, 8, 7 · 70 × 5"
+  const parts = []; let curW = null, reps = [];
+  sets.forEach(s=>{
+    const w = Number(s.weight)||0;
+    if(curW===null || w!==curW){ if(curW!==null) parts.push(fmtKg(curW)+' &times; '+reps.join(', ')); curW = w; reps = []; }
+    reps.push(Number(s.reps)||0);
+  });
+  if(curW!==null) parts.push((curW>0?fmtKg(curW):'BW')+' &times; '+reps.join(', '));
+  return parts.join(' &middot; ').replace(/^BW/,'BW');
+}
+
+/* ============ PROGRESS › DAY ============ */
+function daySessionsList(){
+  // One session = one split-day on one date. (Previously: everything logged on a calendar date was merged.)
+  const map = new Map();
+  DB.sets.forEach(s=>{
+    const ex = exerciseById(s.exerciseId); if(!ex || !s.date || !isCountedLoggedSet(s)) return;
+    const k = ex.dayId+'|'+s.date;
+    if(!map.has(k)) map.set(k, {key:k, dayId:ex.dayId, date:s.date, sets:[]});
+    map.get(k).sets.push(s);
+  });
+  const out = [];
+  map.forEach(se=>{
+    const day = dayById(se.dayId);
+    const split = DB.splits.find(sp=>(sp.days||[]).some(d=>d.id===se.dayId)) || DB.splits.find(sp=>(sp.dayIds||[]).includes(se.dayId)) || null;
+    se.dayName = day ? day.name : 'Session';
+    se.splitName = split ? split.name : '';
+    se.sets.sort((a,b)=>setSortValue(a)-setSortValue(b));
+    se.work = se.sets.filter(s=>isWorkingSet(s) && Number(s.reps)>0);
+    se.volume = se.work.reduce((a,s)=>a+(Number(s.weight)||0)*(Number(s.reps)||0),0);
+    se.reps = se.work.reduce((a,s)=>a+(Number(s.reps)||0),0);
+    out.push(se);
+  });
+  return out.sort((a,b)=> a.date===b.date ? 0 : (a.date<b.date?-1:1));
+}
 function renderProgressDayMode(){
   setHeader('Progress', 'Day performance', null, null);
   destroyCharts(); // clear any charts left over from another Progress mode
   let html = buildProgressModeSwitcherHtml();
 
-  const sessions = allLoggedSessions();
-  if(!sessions.length){
+  const all = daySessionsList().filter(s=>s.work.length);
+  if(!all.length){
     html += `<div class="empty"><p>No logged sessions yet. Log a workout from the Log tab to see day-level analytics here.</p></div>`;
     $main.innerHTML = html; bindProgressModeSwitcher(); return;
   }
 
-  if(!state.progressDaySessionDate || !sessions.some(s=>s.date===state.progressDaySessionDate)){
-    state.progressDaySessionDate = sessions[sessions.length-1].date; // most recent
+  // ---- pick a DAY, then one of its occurrences ----
+  const lastByDay = new Map();
+  all.forEach(s=>{ lastByDay.set(s.dayId, s); }); // all is date-ascending, so the last write is the newest
+  const dayChoices = [...lastByDay.values()].sort((a,b)=> a.date<b.date?1:-1);
+  if(!state.progressDayId || !lastByDay.has(state.progressDayId)){
+    const fromDate = state.progressDaySessionDate && all.find(s=>s.date===state.progressDaySessionDate);
+    state.progressDayId = (fromDate ? fromDate.dayId : dayChoices[0].dayId);
   }
-  const descDates = sessions.slice().reverse();
+  const occ = all.filter(s=>s.dayId===state.progressDayId);          // ascending
+  if(!state.progressDaySessionDate || !occ.some(s=>s.date===state.progressDaySessionDate)) state.progressDaySessionDate = occ[occ.length-1].date;
+  const session = occ.find(s=>s.date===state.progressDaySessionDate);
+  const occIndex = occ.indexOf(session);
+  const prevOcc = occIndex>0 ? occ[occIndex-1] : null;
+  const multiSplit = DB.splits.length>1;
+
   html += `<div class="card">
-    <div class="card-title">Session</div>
+    <div class="card-title">Day</div>
+    <select id="p-day-pick">
+      ${dayChoices.map(s=>`<option value="${s.dayId}" ${s.dayId===state.progressDayId?'selected':''}>${multiSplit&&s.splitName?esc(s.splitName)+' · ':''}${esc(s.dayName)}</option>`).join('')}
+    </select>
+    <div class="card-title" style="margin-top:12px;">Occurrence <span class="card-title-sub">${occ.length} logged</span></div>
     <select id="p-day-session">
-      ${descDates.map(s=>`<option value="${s.date}" ${s.date===state.progressDaySessionDate?'selected':''}>${fmtDate(s.date)} &middot; ${esc(s.dayName)}</option>`).join('')}
+      ${occ.slice().reverse().map((s,i)=>`<option value="${s.date}" ${s.date===session.date?'selected':''}>${fmtDate(s.date)}${i===0?' · latest':''}</option>`).join('')}
     </select>
   </div>`;
 
-  const session = sessionByDate(state.progressDaySessionDate);
-  const daySessions = session.dayId ? sessionsForDay(session.dayId) : [session];
-  const occIndex = daySessions.findIndex(s=>s.date===session.date);
-  const prevOcc = occIndex>0 ? daySessions[occIndex-1] : null;
-
-  // ---- overview metrics ----
-  const totalVolume = session.volume;
-  const totalSets = session.setCount;
-  const totalReps = session.repCount;
-  const exCount = session.exercises.length;
-  const workingSessionSets = session.sets.filter(isWorkingPerformanceSet);
-  const avgWeight = workingSessionSets.length ? (workingSessionSets.reduce((a,s)=>a+(Number(s.weight)||0),0)/workingSessionSets.length) : 0;
-  const avgReps = workingSessionSets.length ? (workingSessionSets.reduce((a,s)=>a+(Number(s.reps)||0),0)/workingSessionSets.length) : 0;
-
-  // PRs achieved this session: exercise's top weight this session ties/exceeds
-  // its all-time-best weight as of this date (using existing PB logic, no
-  // change to how PBs are calculated elsewhere — this just checks the max).
-  let prCount = 0; const prExNames = [];
-  session.exercises.forEach(ex=>{
-    const histSets = setsOfExercise(ex.id).filter(s=>s.date<=session.date);
-    if(!histSets.length) return;
-    const workingHistSets = histSets.filter(isWorkingPerformanceSet);
-    if(!workingHistSets.length) return;
-    const allTimeBest = Math.max(...workingHistSets.map(s=>Number(s.weight)||0));
-    const sessionBestSets = session.sets.filter(s=>s.exerciseId===ex.id && isWorkingPerformanceSet(s));
-    if(!sessionBestSets.length) return;
-    const sessionBest = Math.max(...sessionBestSets.map(s=>Number(s.weight)||0));
-    if(sessionBest>=allTimeBest){ prCount++; prExNames.push(ex.name); }
+  // ---- per-exercise breakdown (like-for-like vs the last time EACH exercise was done) ----
+  const groups = new Map(); // identity key -> {ex, sets}
+  session.work.forEach(s=>{
+    const ex = exerciseById(s.exerciseId); if(!ex) return;
+    const k = exerciseIdentityKey(ex.name);
+    if(!groups.has(k)) groups.set(k, {key:k, ex, sets:[]});
+    groups.get(k).sets.push(s);
   });
-
-  // strongest single-set performance this session (by set volume)
-  let strongest = null;
-  session.sets.forEach(s=>{
-    const v = (isWorkingSet(s)?s.weight*s.reps:0);
-    if(!strongest || v>strongest.v) strongest = {v, ex: exerciseById(s.exerciseId), s};
+  const rows = [];
+  groups.forEach(g=>{
+    const hist = e1rmSessions(g.ex);
+    const cur = hist.find(h=>h.date===session.date) || null;
+    const prior = hist.filter(h=>h.date<session.date);
+    const prev = prior.length ? prior[prior.length-1] : null;
+    const row = {g, cur, prev, kind:'new', pct:null, pr:false};
+    const topNow = cur && cur.set ? cur.set : (g.sets.slice().sort((a,b)=>(b.weight*(1+b.reps/30))-(a.weight*(1+a.reps/30)))[0]);
+    row.topNow = topNow;
+    if(cur && prev){
+      row.pct = (cur.e1rm/prev.e1rm-1)*100;
+      row.kind = row.pct>PROGRESS_FLAT_PCT ? 'up' : row.pct<-PROGRESS_FLAT_PCT ? 'down' : 'same';
+      row.pr = prior.length>0 && cur.e1rm > Math.max(...prior.map(h=>h.e1rm));
+      if(row.pr && row.kind==='same') row.kind = 'up';   // a new best is progress by definition; keeps the arrow and the PR badge consistent
+    } else if(!cur){
+      // bodyweight / unusable for e1RM: fall back to total reps vs the previous time
+      const all2 = setsOfExercise(g.ex.id).filter(s=>isWorkingSet(s) && Number(s.reps)>0 && s.date<session.date);
+      if(all2.length){
+        const lastDate = all2[all2.length-1].date;
+        const prevReps = all2.filter(s=>s.date===lastDate).reduce((a,s)=>a+Number(s.reps),0);
+        const nowReps = g.sets.reduce((a,s)=>a+Number(s.reps),0);
+        row.pct = (nowReps/prevReps-1)*100; row.repsMode = {nowReps, prevReps, lastDate};
+        row.kind = row.pct>PROGRESS_FLAT_PCT ? 'up' : row.pct<-PROGRESS_FLAT_PCT ? 'down' : 'same';
+      }
+    }
+    rows.push(row);
   });
+  const cnt = {up:0,same:0,down:0,new:0}; rows.forEach(r=>cnt[r.kind]++);
+  const prRows = rows.filter(r=>r.pr);
+  const comparable = cnt.up+cnt.same+cnt.down;
 
-  const volChangePct = prevOcc && prevOcc.volume>0 ? ((totalVolume-prevOcc.volume)/prevOcc.volume*100) : null;
-  const setDelta = prevOcc ? totalSets - prevOcc.setCount : null;
-  const prevWorking = prevOcc ? prevOcc.sets.filter(isWorkingPerformanceSet) : [];
-  const prevAvgReps = prevWorking.length ? prevWorking.reduce((a,s)=>a+(Number(s.reps)||0),0)/prevWorking.length : 0;
-  const repsDelta = prevOcc && prevWorking.length ? +(avgReps - prevAvgReps).toFixed(1) : null;
-
+  // ---- overview numbers (working sets only, so every tile agrees) ----
+  const volChangePct = prevOcc && prevOcc.volume>0 ? ((session.volume-prevOcc.volume)/prevOcc.volume*100) : null;
+  let top = null;
+  rows.forEach(r=>{ if(r.cur && (!top || r.cur.e1rm>top.cur.e1rm)) top = r; });
+  const trendCls = v => v>0 ? 'trend-up' : v<0 ? 'trend-down' : '';
   html += `<div class="card">
     <div class="card-title">Session overview</div>
     <div class="stat-grid">
-      <div class="stat-tile"><div class="label">Total volume</div><div class="value">${Math.round(totalVolume).toLocaleString()}<span class="unit">kg</span></div></div>
-      <div class="stat-tile"><div class="label">Total sets</div><div class="value">${totalSets}</div><div class="sub">${exCount} exercise${exCount===1?'':'s'}</div></div>
-      <div class="stat-tile"><div class="label">Total reps</div><div class="value">${totalReps}</div><div class="sub">avg ${avgReps.toFixed(1)}/set</div></div>
-      <div class="stat-tile"><div class="label">Avg weight</div><div class="value">${avgWeight.toFixed(1)}<span class="unit">kg</span></div></div>
-      <div class="stat-tile"><div class="label">PRs this session</div><div class="value">${prCount}</div><div class="sub">${prCount ? esc(prExNames.slice(0,2).join(', ')) : '&mdash;'}</div></div>
-      <div class="stat-tile"><div class="label">Strongest set</div><div class="value" style="font-size:14px;">${strongest ? esc(strongest.ex.name) : '&mdash;'}</div><div class="sub">${strongest ? `${strongest.s.weight}kg &times; ${strongest.s.reps}` : ''}</div></div>
+      <div class="stat-tile"><div class="label">Volume</div><div class="value">${Math.round(session.volume).toLocaleString()}<span class="unit">kg</span></div><div class="sub">${volChangePct==null?'first time logged':`<span class="${trendCls(volChangePct)}">${fmtSignedPct(volChangePct)}</span> vs last time`}</div></div>
+      <div class="stat-tile"><div class="label">Working sets</div><div class="value">${session.work.length}</div><div class="sub">${groups.size} exercise${groups.size===1?'':'s'}${session.sets.length>session.work.length?` &middot; ${session.sets.length-session.work.length} warm-up`:''}</div></div>
+      <div class="stat-tile"><div class="label">Total reps</div><div class="value">${session.reps}</div><div class="sub">${prevOcc?`${session.reps-prevOcc.reps>=0?'+':''}${session.reps-prevOcc.reps} vs last time`:'&mdash;'}</div></div>
+      <div class="stat-tile"><div class="label">PRs</div><div class="value">${prRows.length}</div><div class="sub">${prRows.length?esc(prRows.slice(0,2).map(r=>r.g.ex.name).join(', ')):'none this session'}</div></div>
+      <div class="stat-tile"><div class="label">Exercises up</div><div class="value">${cnt.up}<span class="unit"> / ${comparable}</span></div><div class="sub">${cnt.new?cnt.new+' new &middot; ':''}${cnt.down} down</div></div>
+      <div class="stat-tile"><div class="label">Top set (e1RM)</div><div class="value" style="font-size:14px;">${top?esc(top.g.ex.name):'&mdash;'}</div><div class="sub">${top&&top.topNow?`${fmtKg(top.topNow.weight)}kg &times; ${top.topNow.reps} &middot; ~${Math.round(top.cur.e1rm)}kg`:''}</div></div>
     </div>
   </div>`;
 
-  // ---- muscle distribution ----
-  const muscleVol = {};
-  session.sets.forEach(s=>{
-    const ex = exerciseById(s.exerciseId); if(!ex) return;
-    const g = classifyExercise(ex.name);
-    if(!g) return;
-    muscleVol[g] = (muscleVol[g]||0) + (isWorkingSet(s)?s.weight*s.reps:0);
-  });
-  const muscleKeys = Object.keys(muscleVol);
+  // ---- exercise breakdown card ----
+  const arrow = {up:'&uarr;',same:'&rarr;',down:'&darr;',new:'&bull;'};
+  const cls = {up:'trend-up',same:'',down:'trend-down',new:''};
   html += `<div class="card">
-    <div class="card-title">Muscle distribution</div>
-    ${muscleKeys.length ? (()=>{
-      const max = Math.max(...muscleKeys.map(k=>muscleVol[k]));
-      return STATS_GROUPS.filter(g=>muscleVol[g]).map(g=>`
-        <div class="muscle-bar-row">
-          <div class="mb-label">${STATS_LABELS[g]}</div>
-          <div class="muscle-bar-track"><div class="muscle-bar-fill" style="width:${Math.round(muscleVol[g]/max*100)}%"></div></div>
-          <div class="muscle-bar-val">${Math.round(muscleVol[g]).toLocaleString()}kg</div>
-        </div>`).join('');
-    })() : `<p style="font-size:12.5px;color:var(--text-faint);">Muscle group not classified for the exercises in this session.</p>`}
-    ${session.exercises.some(ex=>classificationSource(ex.name)==='unknown') ? `<p style="font-size:11px;color:var(--text-faint);margin-top:8px;">Some exercises here aren't classified yet — classify them from the Split tab to include their volume.</p>` : ''}
+    <div class="card-title">Exercise by exercise <span class="card-title-sub">vs the last time each was done</span></div>
+    <div class="day-ex-summary">${[['up','up'],['same','same'],['down','down'],['new','new']].filter(([k])=>cnt[k]).map(([k,l])=>`<span class="${cls[k]}">${arrow[k]} ${cnt[k]} ${l}</span>`).join(' &nbsp;&middot;&nbsp; ')}</div>
+    ${rows.map(r=>{
+      const wl = w => Number(w)>0 ? fmtKg(w)+'kg' : 'BW';
+      const now = r.topNow ? `${wl(r.topNow.weight)} &times; ${r.topNow.reps}` : '&mdash;';
+      let was = 'first time';
+      if(r.repsMode) was = `${r.repsMode.prevReps} reps total (${fmtDate(r.repsMode.lastDate)})`;
+      else if(r.prev) was = `${r.prev.set?wl(r.prev.set.weight)+' &times; '+r.prev.set.reps:'&mdash;'} (${fmtDate(r.prev.date)})`;
+      const delta = r.pct==null ? '' : fmtSignedPct(r.pct);
+      return `<div class="day-ex-row">
+        <div class="day-ex-main">
+          <div class="day-ex-name">${esc(r.g.ex.name)}${r.pr?' <span class="pr-badge">PR</span>':''}</div>
+          <div class="day-ex-sets">${setsLabel(r.g.sets)}</div>
+          <div class="day-ex-prev">Top set ${now} &middot; before: ${was}</div>
+        </div>
+        <div class="day-ex-delta ${cls[r.kind]}"><span>${arrow[r.kind]}</span>${delta?`<b>${delta}</b>`:`<b>New</b>`}</div>
+      </div>`;
+    }).join('')}
+    <p class="split-foot">Arrows compare estimated 1RM (weight and reps together), so lifting more weight for fewer reps or the reverse is judged fairly. Changes under &plusmn;${PROGRESS_FLAT_PCT}% count as &ldquo;same&rdquo;. PR = e1RM above every earlier session of that lift.</p>
   </div>`;
 
-  // ---- session performance score (transparent, only if enough data) ----
-  if(!prevOcc && daySessions.length<2){
-    html += `<div class="card">
-      <div class="card-title">Session performance</div>
-      <p style="font-size:12.5px;color:var(--text-faint);">Not enough history for a performance score — this is the first logged occurrence of this day.</p>
-    </div>`;
-  } else {
-    const priorOccs = daySessions.slice(0, occIndex);
-    const avgPriorSets = priorOccs.length ? priorOccs.reduce((a,s)=>a+s.setCount,0)/priorOccs.length : totalSets;
-    const avgPriorReps = priorOccs.length ? priorOccs.reduce((a,s)=>a+s.repCount/s.setCount,0)/priorOccs.length : avgReps;
-    const volumeTrendScore = volChangePct==null ? 50 : Math.max(0,Math.min(100, 50 + volChangePct));
-    const setCompletionScore = avgPriorSets>0 ? Math.max(0,Math.min(100, (totalSets/avgPriorSets)*100)) : 50;
-    const repPerformanceScore = avgPriorReps>0 ? Math.max(0,Math.min(100, (avgReps/avgPriorReps)*100)) : 50;
-    const prScore = prCount>0 ? 100 : 55;
-    const components = [
-      {label:'Volume trend', v:volumeTrendScore},
-      {label:'Set completion', v:setCompletionScore},
-      {label:'Rep performance', v:repPerformanceScore},
-      {label:'PRs achieved', v:prScore}
-    ];
-    const overall = Math.round(components.reduce((a,c)=>a+c.v,0)/components.length);
-    html += `<div class="card">
-      <div class="card-title">Session performance</div>
-      <div class="score-ring-row">
-        <div class="score-ring">${progressScoreRingSvg(overall)}<div class="ring-num">${overall}</div></div>
-        <div class="score-components">
-          ${components.map(c=>`<div class="score-comp-row"><span>${c.label}</span><b>${Math.round(c.v)}</b></div>`).join('')}
-        </div>
-      </div>
-      <p style="font-size:10.5px;color:var(--text-faint);margin-top:10px;line-height:1.4;">A transparent composite of the components above — not a scientific fitness score, just a quick read on how this session compares with your own history for this day.</p>
-    </div>`;
-  }
+  // ---- muscle distribution: share of volume, with change vs last time ----
+  const share = se=>{
+    const m = {}; let tot = 0;
+    se.work.forEach(s=>{ const ex=exerciseById(s.exerciseId); if(!ex) return; const g=classifyExercise(ex.name); if(!g) return; const v=(Number(s.weight)||0)*(Number(s.reps)||0); m[g]=(m[g]||0)+v; tot+=v; });
+    return {m, tot};
+  };
+  const shNow = share(session), shPrev = prevOcc ? share(prevOcc) : null;
+  const mkeys = STATS_GROUPS.filter(g=>shNow.m[g]);
+  const maxShare = Math.max(1, ...mkeys.map(g=>shNow.m[g]/shNow.tot*100));
+  html += `<div class="card">
+    <div class="card-title">Muscle distribution <span class="card-title-sub">share of volume</span></div>
+    ${mkeys.length ? mkeys.map(g=>{
+      const p = shNow.m[g]/shNow.tot*100;
+      const pp = shPrev && shPrev.tot ? (shPrev.m[g]||0)/shPrev.tot*100 : null;
+      const d = pp==null ? null : Math.round(p)-Math.round(pp);
+      return `<div class="muscle-bar-row">
+        <div class="mb-label">${STATS_LABELS[g]}</div>
+        <div class="muscle-bar-track"><div class="muscle-bar-fill" style="width:${Math.round(p/maxShare*100)}%"></div></div>
+        <div class="muscle-bar-val" style="width:74px;">${Math.round(p)}%${d!=null&&d!==0?` <span class="${d>0?'trend-up':'trend-down'}" style="font-size:10px;">${d>0?'+':''}${d}</span>`:''}</div>
+      </div>`;
+    }).join('') : `<p style="font-size:12.5px;color:var(--text-faint);">Muscle group not classified for the exercises in this session.</p>`}
+    ${[...groups.values()].some(g=>classificationSource(g.ex.name)==='unknown') ? `<p style="font-size:11px;color:var(--text-faint);margin-top:8px;">Some exercises here aren't classified yet &mdash; classify them from the Split tab to include them.</p>` : ''}
+  </div>`;
 
-  // ---- comparison vs previous occurrence ----
+  // ---- compact comparison vs previous occurrence ----
   html += `<div class="card">
     <div class="card-title">Vs. previous occurrence of this day</div>
     ${prevOcc ? `
-      <div class="compare-row"><span class="cr-label">Volume</span><span class="cr-val" style="color:${volChangePct>0?'var(--good)':volChangePct<0?'var(--rust)':'var(--text)'}">${volChangePct==null?'&mdash;':(volChangePct>=0?'+':'')+volChangePct.toFixed(1)+'%'}</span></div>
-      <div class="compare-row"><span class="cr-label">Sets</span><span class="cr-val" style="color:${setDelta>0?'var(--good)':setDelta<0?'var(--rust)':'var(--text)'}">${setDelta>=0?'+':''}${setDelta}</span></div>
-      <div class="compare-row"><span class="cr-label">Avg reps</span><span class="cr-val" style="color:${repsDelta>0?'var(--good)':repsDelta<0?'var(--rust)':'var(--text)'}">${repsDelta>=0?'+':''}${repsDelta}</span></div>
-      <div class="compare-row"><span class="cr-label">PRs</span><span class="cr-val">${prCount}</span></div>
+      <div class="compare-row"><span class="cr-label">Volume</span><span class="cr-val ${trendCls(volChangePct)}">${volChangePct==null?'&mdash;':fmtSignedPct(volChangePct)}</span></div>
+      <div class="compare-row"><span class="cr-label">Working sets</span><span class="cr-val ${trendCls(session.work.length-prevOcc.work.length)}">${session.work.length-prevOcc.work.length>=0?'+':''}${session.work.length-prevOcc.work.length}</span></div>
+      <div class="compare-row"><span class="cr-label">Total reps</span><span class="cr-val ${trendCls(session.reps-prevOcc.reps)}">${session.reps-prevOcc.reps>=0?'+':''}${session.reps-prevOcc.reps}</span></div>
       <div class="compare-row"><span class="cr-label">Previous occurrence</span><span class="cr-val" style="font-size:12px;color:var(--text-faint);">${fmtDate(prevOcc.date)}</span></div>
     ` : `<p style="font-size:12.5px;color:var(--text-faint);">No previous occurrence of this day to compare against yet.</p>`}
   </div>`;
 
-  // ---- trend chart across occurrences of this day ----
-  if(daySessions.length>=2){
+  // ---- trend across occurrences of this day ----
+  if(occ.length>=2){
     html += `<div class="card">
       <div class="card-title">Volume across occurrences of this day</div>
       <div class="chart-wrap"><canvas id="chart-day-trend" role="img" aria-label="Volume trend across occurrences of this day">Day volume trend chart.</canvas></div>
@@ -3893,15 +4093,15 @@ function renderProgressDayMode(){
 
   $main.innerHTML = html;
   bindProgressModeSwitcher();
+  document.getElementById('p-day-pick').onchange = e=>{ state.progressDayId = e.target.value; state.progressDaySessionDate = null; render(); };
   document.getElementById('p-day-session').onchange = e=>{ state.progressDaySessionDate = e.target.value; render(); };
 
-  if(daySessions.length>=2){
-    destroyCharts();
+  if(occ.length>=2){
     charts.dayTrend = new Chart(document.getElementById('chart-day-trend'), {
       type:'line',
-      data:{ labels: daySessions.map(s=>fmtDate(s.date)), datasets:[{ label:'Volume', data: daySessions.map(s=>Math.round(s.volume)),
+      data:{ labels: occ.map(s=>fmtDate(s.date)), datasets:[{ label:'Volume', data: occ.map(s=>Math.round(s.volume)),
         borderColor:'#E8B32C', backgroundColor:'rgba(232,179,44,0.1)', borderWidth:2, pointRadius:4,
-        pointBackgroundColor: daySessions.map(s=>s.date===session.date?'#E8B32C':'#5D636B'),
+        pointBackgroundColor: occ.map(s=>s.date===session.date?'#E8B32C':'#5D636B'),
         pointBorderColor:'#1B1E23', pointBorderWidth:2, fill:true, tension:0.25 }]},
       options:{ responsive:true, maintainAspectRatio:false,
         interaction:{ mode:'index', intersect:false },
