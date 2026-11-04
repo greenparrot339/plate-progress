@@ -33,7 +33,9 @@
           "accept": [
             "application/json",
             ".json",
-            "application/octet-stream"
+            "application/octet-stream",
+            "text/plain",
+            "*/*"
           ]
         }
       ]
