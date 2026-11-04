@@ -1,4 +1,4 @@
-const CACHE_NAME = 'plate-progress-v50-strength';
+const CACHE_NAME = 'plate-progress-v51-split-share';
 const APP_SHELL = [
   './', './index.html', './manifest.json', './exercise-database.js', './stats3d.js', './chart-max.js?v=47', './strength-intelligence.js?v=1', './strength-ui.js?v=3', './body.glb',
   './icon-192.png', './icon-512.png'
@@ -44,6 +44,32 @@ self.addEventListener('activate', event => {
     const keys = await caches.keys();
     await Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)));
     await self.clients.claim();
+  })());
+});
+
+// Web Share Target: lets the installed app appear in the Android Share menu (e.g. from WhatsApp)
+// for exported split files. The file is stashed in the cache and the app is opened on ?shared=1,
+// where index.html reads it and shows the split preview. Nothing is imported automatically.
+self.addEventListener('fetch', event => {
+  const req = event.request;
+  if (req.method !== 'POST') return;
+  const target = new URL('./share-target', self.registration.scope);
+  const url = new URL(req.url);
+  if (url.origin !== target.origin || url.pathname !== target.pathname) return;
+  event.respondWith((async () => {
+    const back = ok => Response.redirect(new URL('./index.html?shared=' + (ok ? '1' : '0'), self.registration.scope).href, 303);
+    try {
+      const form = await req.formData();
+      let text = null;
+      for (const v of form.getAll('split')) { if (v && typeof v !== 'string') { text = await v.text(); break; } }
+      if (text === null) return back(false);
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(new URL('./__shared-split.json', self.registration.scope).href,
+        new Response(text, { headers: { 'Content-Type': 'application/json' } }));
+      return back(true);
+    } catch (error) {
+      return back(false);
+    }
   })());
 });
 

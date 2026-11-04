@@ -911,6 +911,331 @@ function importBackup(){
     }catch(err){ console.error(err); toast('Invalid backup file'); }
   }; input.click();
 }
+/* ============ SINGLE-SPLIT EXPORT / IMPORT ============ */
+// Exports ONE split together with everything logged under it (every exercise, including
+// archived ones, and every set) so it can be moved to another device. Importing adds it as a
+// brand-new split next to whatever is already there — nothing existing is replaced. All IDs are
+// regenerated on import so they can never collide with records on the receiving device.
+function splitExercisesAndSets(split){
+  const dayIds = new Set([...(split.dayIds||[]), ...(split.days||[]).map(d=>d.id)]);
+  const exercises = DB.exercises.filter(e=>e.splitId===split.id || dayIds.has(e.dayId));
+  const exIds = new Set(exercises.map(e=>e.id));
+  const sets = DB.sets.filter(s=>exIds.has(s.exerciseId));
+  return { dayIds, exercises, sets };
+}
+async function exportSplit(splitId){
+  const split = splitById(splitId); if(!split){ toast('Split not found'); return; }
+  const { exercises, sets } = splitExercisesAndSets(split);
+  const overrides = {};
+  exercises.forEach(e=>{ const k=normalizeExerciseName(e.name); if(k && DB.exerciseClassificationOverrides[k]) overrides[k]=DB.exerciseClassificationOverrides[k]; });
+  downloadSplitPayload({ split, exercises, sets, exerciseClassificationOverrides:overrides });
+}
+function downloadSplitPayload(d){
+  const payload = { version:1, app:'Plate & Progress', type:'split', exportedAt:new Date().toISOString(), data:d };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const safe=(d.split.name||'split').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'split';
+  const a=document.createElement('a'); a.href=url; a.download='plate-progress-split-'+safe+'-'+todayStr()+'.json'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast(`Exported "${d.split.name}" (${d.exercises.length} exercises, ${d.sets.length} sets)`);
+}
+function parseSplitFileText(text){
+  let parsed; try{ parsed=JSON.parse(text); }catch(e){ throw new Error('That file is not valid JSON'); }
+  const d=parsed&&parsed.data;
+  if(!parsed || parsed.type!=='split' || !d || !d.split || !Array.isArray(d.split.days) || !Array.isArray(d.exercises) || !Array.isArray(d.sets)){
+    if(parsed && parsed.data && Array.isArray(parsed.data.splits)) throw new Error('This is a full backup — use "Import backup" for it.');
+    throw new Error('Not a split export file');
+  }
+  return d;
+}
+// "Name" if free, otherwise "Name (imported)", "Name (imported 2)", ...
+function uniqueSplitName(name){
+  const base=String(name||'').trim()||'Imported split';
+  const taken=new Set(DB.splits.map(s=>String(s.name).trim().toLowerCase()));
+  if(!taken.has(base.toLowerCase())) return base;
+  const first=base+' (imported)'; let n=first, i=2;
+  while(taken.has(n.toLowerCase())) n=base+' (imported '+(i++)+')';
+  return n;
+}
+function splitNameTaken(name){ const k=String(name).trim().toLowerCase(); return DB.splits.some(s=>String(s.name).trim().toLowerCase()===k); }
+async function addImportedSplit(d, name){
+  const src=d.split;
+  const dayMap=new Map();
+  [...(src.dayIds||[]), ...src.days.map(x=>x.id)].forEach(id=>{ if(id && !dayMap.has(id)) dayMap.set(id, uid('day')); });
+  const exercises=d.exercises.filter(e=>e&&e.id&&dayMap.has(e.dayId));
+  const exMap=new Map(exercises.map(e=>[e.id, uid('ex')]));
+  const sets=d.sets.filter(s=>s&&exMap.has(s.exerciseId)&&s.date);
+  const newSplitId=uid('split');
+  const nowIso=new Date().toISOString();
+  // Archived on arrival so it never displaces the split you're training on; if there is no
+  // active split yet it becomes the active one.
+  const hasActive=!!activeSplit();
+  const newSplit={ ...src, id:newSplitId, name, days:src.days.map(x=>({...x, id:dayMap.get(x.id)})), dayIds:[...dayMap.values()], createdAt:src.createdAt||nowIso, archivedAt: hasActive ? nowIso : null };
+  const newExercises=exercises.map(e=>({...e, id:exMap.get(e.id), splitId:newSplitId, dayId:dayMap.get(e.dayId)}));
+  const newSets=sets.map(s=>({...s, id:uid('set'), exerciseId:exMap.get(s.exerciseId)}));
+  DB.splits.push(newSplit);
+  DB.exercises.push(...newExercises);
+  DB.sets.push(...newSets);
+  if(d.exerciseClassificationOverrides && typeof d.exerciseClassificationOverrides==='object'){
+    Object.keys(d.exerciseClassificationOverrides).forEach(k=>{ if(!DB.exerciseClassificationOverrides[k]) DB.exerciseClassificationOverrides[k]=d.exerciseClassificationOverrides[k]; });
+  }
+  await Promise.all(['splits','exercises','sets','exerciseClassificationOverrides'].map(save));
+  buildExerciseClassificationIndex();
+  return { id:newSplitId, exercises:newExercises.length, sets:newSets.length };
+}
+// File picker (works on every device) -> preview. The Android Share menu enters through
+// openSplitPreview() directly (see sw.js "share-target" and takeSharedSplit()).
+function importSplit(){
+  const input=document.createElement('input'); input.type='file'; input.accept='.json,application/json';
+  input.onchange=async()=>{
+    const file=input.files&&input.files[0]; if(!file) return;
+    openSplitPreview(await file.text());
+  }; input.click();
+}
+
+/* ============ SPLIT FILE PREVIEW (view + edit before importing) ============ */
+// A temporary, in-memory working copy of a split file. Nothing here touches IndexedDB until
+// the user presses Import; Discard throws it all away.
+let spPreview = null; // { d, open:Set<exerciseId>, dirty:boolean }
+function spInjectStyles(){
+  if(document.getElementById('sp-styles')) return;
+  const st=document.createElement('style'); st.id='sp-styles';
+  st.textContent=`
+  #sp-overlay{position:fixed;inset:0;z-index:95;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .sp-top{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;justify-content:space-between;padding:12px 14px;background:var(--bg);border-bottom:1px solid var(--border);}
+  .sp-top h2{margin:0;font-family:var(--font-display);font-size:16px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;}
+  .sp-body{padding:14px 14px 40px;max-width:640px;margin:0 auto;}
+  .sp-note{font-size:12px;color:var(--text-faint);line-height:1.45;margin:0 0 12px;}
+  .sp-stats{font-size:12px;color:var(--text-dim);margin-top:8px;}
+  .sp-dayhead{display:flex;gap:8px;align-items:center;margin-bottom:10px;}
+  .sp-dayhead input{font-weight:600;}
+  .sp-ex{border-top:1px solid var(--border);padding:9px 0;}
+  .sp-exrow{display:flex;gap:6px;align-items:center;}
+  .sp-exrow input{padding:7px 9px;font-size:14px;}
+  .sp-sets-btn{white-space:nowrap;}
+  .sp-sets{margin-top:8px;}
+  .sp-date{font-size:11px;color:var(--accent);margin:8px 0 4px;font-family:var(--font-mono);}
+  .sp-setrow{display:grid;grid-template-columns:34px 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:5px;}
+  .sp-setrow input{padding:6px 8px;font-size:13px;}
+  .sp-setno{font-size:11px;color:var(--text-faint);font-family:var(--font-mono);text-align:center;}
+  .sp-add{display:flex;gap:6px;margin-top:8px;}
+  .sp-add input{padding:8px 10px;font-size:14px;}
+  .sp-setdate{padding:6px 8px;font-size:12px;margin-top:2px;}
+  `;
+  document.head.appendChild(st);
+}
+function openSplitPreview(text){
+  let d;
+  try{ d=parseSplitFileText(text); }
+  catch(err){ console.error(err); toast(err&&err.message?err.message:'Invalid split file', 3200); return; }
+  d=JSON.parse(JSON.stringify(d));
+  const dayIds=new Set([...(d.split.dayIds||[]), ...d.split.days.map(x=>x.id)]);
+  d.split.dayIds=[...dayIds];
+  d.exercises=d.exercises.filter(e=>e&&e.id&&dayIds.has(e.dayId));
+  const have=new Set(d.exercises.map(e=>e.id));
+  d.sets=d.sets.filter(s=>s&&have.has(s.exerciseId)&&s.date);
+  d.sets.forEach(s=>{ if(!s.id) s.id=uid('set'); });
+  spPreview={ d, open:new Set(), dirty:false };
+  spInjectStyles();
+  let ov=document.getElementById('sp-overlay');
+  if(!ov){ ov=document.createElement('div'); ov.id='sp-overlay'; document.body.appendChild(ov); bindSplitPreview(ov); }
+  document.body.style.overflow='hidden';
+  renderSplitPreview();
+  ov.scrollTop=0;
+}
+function spIsOpen(){ return !!document.getElementById('sp-overlay'); }
+function closeSplitPreview(force){
+  if(!spIsOpen()) return;
+  if(!force && spPreview && spPreview.dirty && !confirm('Discard your edits to this split file?')) return;
+  const ov=document.getElementById('sp-overlay'); if(ov) ov.remove();
+  document.body.style.overflow='';
+  spPreview=null;
+}
+function spStatsLine(d){
+  const dates=d.sets.map(s=>s.date).sort();
+  const range=dates.length ? ` &middot; ${fmtDate(dates[0])} &rarr; ${fmtDate(dates[dates.length-1])}` : '';
+  const active=d.exercises.filter(e=>!e.archived && d.split.days.some(x=>x.id===e.dayId));
+  return `${d.split.days.length} day${d.split.days.length===1?'':'s'} &middot; ${active.length} exercise${active.length===1?'':'s'} &middot; ${d.sets.length} logged set${d.sets.length===1?'':'s'}${range}`;
+}
+function spExerciseHtml(e){
+  const d=spPreview.d;
+  const sets=d.sets.filter(s=>s.exerciseId===e.id);
+  const isOpen=spPreview.open.has(e.id);
+  let setsHtml='';
+  if(isOpen){
+    if(!sets.length) setsHtml='<div class="sp-sets"><p class="sp-note" style="margin:0;">No sets logged.</p></div>';
+    else{
+      const byDate={};
+      sets.forEach(s=>{ (byDate[s.date]=byDate[s.date]||[]).push(s); });
+      setsHtml='<div class="sp-sets">'+Object.keys(byDate).sort().reverse().map(date=>{
+        const rows=byDate[date].slice().sort((a,b)=>setSortValue(a)-setSortValue(b));
+        return `<div class="sp-date">${esc(fmtDate(date))}</div>`+rows.map(s=>`
+          <div class="sp-setrow" data-set="${esc(s.id)}">
+            <span class="sp-setno">${esc(String(s.setNumber??''))}${isWarmupSet(s)?'':''}</span>
+            <input type="number" step="0.5" inputmode="decimal" data-sp="set-weight" value="${esc(String(s.weight??''))}" aria-label="Weight (kg)">
+            <input type="number" inputmode="numeric" data-sp="set-reps" value="${esc(String(s.reps??''))}" aria-label="Reps">
+            <button class="icon-btn" data-sp="set-del" aria-label="Delete set" style="color:var(--rust);"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg></button>
+          </div>`).join('');
+      }).join('')+'</div>';
+    }
+  }
+  return `<div class="sp-ex" data-ex="${esc(e.id)}">
+    <div class="sp-exrow">
+      <input type="text" data-sp="ex-name" value="${esc(e.name)}" aria-label="Exercise name">
+      <button class="btn btn-sm sp-sets-btn" data-sp="ex-toggle">${sets.length} set${sets.length===1?'':'s'} ${isOpen?'&#9652;':'&#9662;'}</button>
+      <button class="icon-btn" data-sp="ex-del" aria-label="Remove exercise" style="color:var(--rust);"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0-1 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 6" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>${setsHtml}</div>`;
+}
+function renderSplitPreview(){
+  const ov=document.getElementById('sp-overlay'); if(!ov||!spPreview) return;
+  const keep=ov.scrollTop;
+  const d=spPreview.d;
+  const dayIdSet=new Set(d.split.days.map(x=>x.id));
+  const archivedEx=d.exercises.filter(e=>e.archived || !dayIdSet.has(e.dayId));
+  let html=`<div class="sp-top">
+      <button class="btn btn-sm" data-sp="discard">Discard</button>
+      <h2>Split preview</h2>
+      <button class="btn btn-sm btn-accent" data-sp="import">Import</button>
+    </div>
+    <div class="sp-body">
+      <p class="sp-note">You're viewing a shared split file. Nothing is saved to this device until you import it. You can edit it first.</p>
+      <div class="card">
+        <label class="field-label" for="sp-name">Split name</label>
+        <input type="text" id="sp-name" data-sp="split-name" value="${esc(d.split.name||'')}">
+        <div class="sp-stats" id="sp-stats">${spStatsLine(d)}</div>
+      </div>`;
+  d.split.days.forEach(day=>{
+    const exs=d.exercises.filter(e=>e.dayId===day.id && !e.archived).sort((a,b)=>(a.order||0)-(b.order||0));
+    html+=`<div class="card" data-day="${esc(day.id)}">
+      <div class="sp-dayhead">
+        <input type="text" data-sp="day-name" value="${esc(day.name)}" aria-label="Day name">
+        <button class="icon-btn" data-sp="day-del" aria-label="Remove day" style="color:var(--rust);"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0-1 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 6" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      ${exs.length?exs.map(spExerciseHtml).join(''):'<p class="sp-note" style="margin:0;">No exercises.</p>'}
+      <div class="sp-add"><input type="text" placeholder="Add exercise" data-sp="ex-new-name"><button class="btn btn-sm" data-sp="ex-add">Add</button></div>
+    </div>`;
+  });
+  html+=`<button class="btn btn-block btn-ghost" data-sp="day-add" style="margin-bottom:12px;">+ Add day</button>`;
+  if(archivedEx.length){
+    html+=`<div class="card"><div class="card-title">Archived exercises <span class="card-title-sub">history only</span></div>${archivedEx.map(spExerciseHtml).join('')}</div>`;
+  }
+  html+=`<button class="btn btn-accent btn-block" data-sp="import">Import into my app</button>
+      <button class="btn btn-block" data-sp="save-file" style="margin-top:8px;">Save edited file</button>
+    </div>`;
+  ov.innerHTML=html;
+  ov.scrollTop=keep;
+}
+function bindSplitPreview(ov){
+  const refreshStats=()=>{ const el=document.getElementById('sp-stats'); if(el&&spPreview) el.innerHTML=spStatsLine(spPreview.d); };
+  const exOf=el=>{ const row=el.closest('[data-ex]'); return row && spPreview.d.exercises.find(e=>e.id===row.dataset.ex); };
+  ov.addEventListener('change', e=>{
+    if(!spPreview) return;
+    const t=e.target, k=t.dataset&&t.dataset.sp; if(!k) return;
+    const d=spPreview.d;
+    if(k==='split-name'){ d.split.name=t.value.trim()||d.split.name; t.value=d.split.name; spPreview.dirty=true; }
+    else if(k==='day-name'){ const day=d.split.days.find(x=>x.id===t.closest('[data-day]').dataset.day); if(day){ day.name=t.value.trim()||day.name; t.value=day.name; spPreview.dirty=true; } }
+    else if(k==='ex-name'){ const ex=exOf(t); if(ex){ ex.name=t.value.trim()||ex.name; t.value=ex.name; spPreview.dirty=true; } }
+    else if(k==='set-weight'||k==='set-reps'){
+      const s=d.sets.find(x=>x.id===t.closest('[data-set]').dataset.set); if(!s) return;
+      const v=Number(t.value);
+      const ok = k==='set-weight' ? (Number.isFinite(v)&&v>=0&&t.value!=='') : (Number.isInteger(v)&&v>0);
+      if(!ok){ t.value=String(k==='set-weight'?s.weight:s.reps); toast('Enter a valid number'); return; }
+      if(k==='set-weight') s.weight=v; else s.reps=v;
+      spPreview.dirty=true;
+    }
+  });
+  ov.addEventListener('click', e=>{
+    if(!spPreview) return;
+    const btn=e.target.closest('[data-sp]'); if(!btn || btn.tagName==='INPUT') return;
+    const k=btn.dataset.sp, d=spPreview.d;
+    if(k==='discard') closeSplitPreview(false);
+    else if(k==='import') openSplitImportNameDialog();
+    else if(k==='save-file') downloadSplitPayload({ split:d.split, exercises:d.exercises, sets:d.sets, exerciseClassificationOverrides:d.exerciseClassificationOverrides||{} });
+    else if(k==='ex-toggle'){ const ex=exOf(btn); if(!ex) return; if(spPreview.open.has(ex.id)) spPreview.open.delete(ex.id); else spPreview.open.add(ex.id); renderSplitPreview(); }
+    else if(k==='ex-del'){
+      const ex=exOf(btn); if(!ex) return;
+      const n=d.sets.filter(s=>s.exerciseId===ex.id).length;
+      if(!confirm(`Remove "${ex.name}"${n?` and its ${n} logged set${n===1?'':'s'}`:''} from this file?`)) return;
+      d.exercises=d.exercises.filter(x=>x.id!==ex.id); d.sets=d.sets.filter(s=>s.exerciseId!==ex.id);
+      spPreview.dirty=true; renderSplitPreview();
+    }
+    else if(k==='ex-add'){
+      const card=btn.closest('[data-day]'); const inp=card.querySelector('[data-sp="ex-new-name"]');
+      const name=inp.value.trim(); if(!name){ inp.focus(); return; }
+      const dayId=card.dataset.day;
+      if(d.exercises.some(x=>x.dayId===dayId && !x.archived && exerciseIdentityKey(x.name)===exerciseIdentityKey(name))){ toast('That exercise is already on this day'); return; }
+      const order=d.exercises.filter(x=>x.dayId===dayId).reduce((m,x)=>Math.max(m,(x.order||0)+1),0);
+      d.exercises.push({ id:uid('ex'), splitId:d.split.id, dayId, name, archived:false, classified:!!classifyExercise(name), order, createdAt:new Date().toISOString() });
+      spPreview.dirty=true; renderSplitPreview();
+    }
+    else if(k==='set-del'){
+      const id=btn.closest('[data-set]').dataset.set;
+      d.sets=d.sets.filter(s=>s.id!==id); spPreview.dirty=true; renderSplitPreview();
+    }
+    else if(k==='day-add'){
+      const day={ id:uid('day'), name:'Day '+(d.split.days.length+1) };
+      d.split.days.push(day); d.split.dayIds=[...new Set([...(d.split.dayIds||[]), day.id])];
+      spPreview.dirty=true; renderSplitPreview();
+    }
+    else if(k==='day-del'){
+      const day=d.split.days.find(x=>x.id===btn.closest('[data-day]').dataset.day); if(!day) return;
+      const exs=d.exercises.filter(x=>x.dayId===day.id);
+      const ids=new Set(exs.map(x=>x.id));
+      const n=d.sets.filter(s=>ids.has(s.exerciseId)).length;
+      if(!confirm(`Remove "${day.name}" with its ${exs.length} exercise${exs.length===1?'':'s'} and ${n} logged set${n===1?'':'s'} from this file?`)) return;
+      d.split.days=d.split.days.filter(x=>x.id!==day.id);
+      d.exercises=d.exercises.filter(x=>x.dayId!==day.id); d.sets=d.sets.filter(s=>!ids.has(s.exerciseId));
+      spPreview.dirty=true; renderSplitPreview();
+    }
+  });
+}
+function openSplitImportNameDialog(){
+  if(!spPreview) return;
+  const d=spPreview.d;
+  if(!d.split.days.length){ toast('Add at least one day first'); return; }
+  const original=String(d.split.name||'').trim()||'Imported split';
+  const suggested=uniqueSplitName(original);
+  const clash=suggested!==original;
+  $modalRoot.innerHTML=`<div class="modal-overlay" id="m-overlay"><div class="modal-sheet">
+    <div class="modal-close-row"><button class="icon-btn" id="m-close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button></div>
+    <h2>Import split</h2>
+    <p style="font-size:12.5px;color:var(--text-dim);line-height:1.45;margin:0 0 12px;">${clash?`You already have a split called &ldquo;${esc(original)}&rdquo;, so it's suggested as &ldquo;${esc(suggested)}&rdquo;. Change it if you like.`:'Choose what to call this split. It is added next to your existing splits &mdash; nothing is replaced.'}</p>
+    <div class="field"><label class="field-label" for="m-impname">Split name</label><input type="text" id="m-impname" value="${esc(suggested)}"></div>
+    <div id="m-imperr" style="color:var(--rust);font-size:12.5px;margin-bottom:10px;display:none;"></div>
+    <button class="btn btn-accent btn-block" id="m-impgo">Import ${d.sets.length} set${d.sets.length===1?'':'s'} &amp; ${d.exercises.length} exercise${d.exercises.length===1?'':'s'}</button>
+  </div></div>`;
+  document.getElementById('m-close').onclick=closeModal;
+  document.getElementById('m-overlay').onclick=e=>{ if(e.target.id==='m-overlay') closeModal(); };
+  const inp=document.getElementById('m-impname'), err=document.getElementById('m-imperr'), go=document.getElementById('m-impgo');
+  go.onclick=async()=>{
+    const name=inp.value.trim();
+    if(!name){ err.textContent='Enter a name.'; err.style.display='block'; return; }
+    if(splitNameTaken(name)){ const alt=uniqueSplitName(name); err.textContent=`A split named "${name}" already exists. Try "${alt}".`; err.style.display='block'; inp.value=alt; return; }
+    go.disabled=true;
+    try{
+      const res=await addImportedSplit(d, name);
+      closeModal(); closeSplitPreview(true);
+      state.tab='split'; state.splitViewId=res.id;
+      render(); toast(`Imported "${name}" (${res.exercises} exercises, ${res.sets} sets)`);
+    }catch(error){ console.error(error); go.disabled=false; err.textContent='Could not import: '+(error&&error.message||'unknown error'); err.style.display='block'; }
+  };
+  setTimeout(()=>{ inp.focus(); inp.select(); }, 50);
+}
+// Android "Share -> Plate & Progress": sw.js stores the shared file and redirects to ?shared=1.
+async function takeSharedSplit(){
+  const flag=new URLSearchParams(location.search).get('shared');
+  if(flag===null) return null;
+  try{ history.replaceState(null,'',location.pathname); }catch(e){}
+  if(flag!=='1' || !window.caches) return false;
+  try{
+    const url=new URL('__shared-split.json', location.href).href;
+    const hit=await caches.match(url);
+    if(!hit) return false;
+    const text=await hit.text();
+    for(const k of await caches.keys()){ try{ await (await caches.open(k)).delete(url); }catch(e){} }
+    return text;
+  }catch(err){ console.error(err); return false; }
+}
 async function exportExerciseDatabase(){
   const bundled=(window.PLATE_PROGRESS_EXERCISE_DATABASE && window.PLATE_PROGRESS_EXERCISE_DATABASE.exercises) || [];
   const local=(DB.exerciseDatabase && Array.isArray(DB.exerciseDatabase.exercises)) ? DB.exerciseDatabase.exercises : null;
@@ -1222,7 +1547,7 @@ document.querySelectorAll('.navbtn').forEach(b=>{
     // tab-swipe gesture compete with it.
     if(t.closest('.day-scroll') || t.closest('.chart-wrap') || t.closest('.segmented') ||
        t.closest('select') || t.closest('input') || t.closest('button') || t.closest('.stats3d-wrap') ||
-       t.closest('.split-gallery-track') || t.closest('#gallery-max-overlay') || t.closest('#chart-max-overlay') || t.closest('#si-overlay')) return;
+       t.closest('.split-gallery-track') || t.closest('#gallery-max-overlay') || t.closest('#chart-max-overlay') || t.closest('#si-overlay') || t.closest('#sp-overlay')) return;
     const touch = e.touches[0];
     sx=touch.clientX; sy=touch.clientY; st=Date.now(); tracking=true;
   }, {passive:true});
@@ -1264,8 +1589,12 @@ function renderOnboarding(){
       <h2 style="font-size:16px;margin-bottom:8px;">Set up your split</h2>
       <p>Name your routine and add the days you train — like Push, Pull, Legs — before logging any sets.</p>
       <button class="btn btn-accent btn-block" id="ob-start">Create your split</button>
+      <button class="btn btn-block" id="ob-import-split" style="margin-top:8px;">Open a split file</button>
+      <button class="btn btn-block btn-ghost" id="ob-import-backup" style="margin-top:8px;">Restore a full backup</button>
     </div>`;
   document.getElementById('ob-start').onclick = ()=> openSplitModal(null);
+  document.getElementById('ob-import-split').onclick = importSplit;
+  document.getElementById('ob-import-backup').onclick = importBackup;
 }
 
 /* ============ SPLIT MODAL (create/rename) ============ */
@@ -2052,6 +2381,8 @@ function renderSplit(){
       <div class="card-title">Local backup</div>
       <p style="font-size:12px;color:var(--text-faint);line-height:1.45;margin:0 0 10px;">Your workout data is stored on this device. Export a backup before clearing browser data or changing phones.</p>
       <div class="field-grid"><button class="btn" id="btn-export">Export backup</button><button class="btn" id="btn-import">Import backup</button></div>
+      <p style="font-size:12px;color:var(--text-faint);line-height:1.45;margin:12px 0 10px;">Share just one split with all its logged history. Opening a split file shows a preview you can edit first; importing adds it as a new split and never replaces your existing data. Exports the split shown above.</p>
+      <div class="field-grid"><button class="btn" id="btn-export-split">Export this split</button><button class="btn" id="btn-import-split">Open a split file</button></div>
       <p style="font-size:12px;color:var(--text-faint);line-height:1.45;margin:12px 0 10px;">Move the exercise database separately between devices. This does not replace your workout backup.</p>
       <div class="field-grid"><button class="btn" id="btn-export-exdb">Export exercise database</button><button class="btn" id="btn-import-exdb">Import exercise database</button></div>
     </div>`;
@@ -2083,6 +2414,8 @@ function renderSplit(){
   if(nsBtn) nsBtn.onclick = ()=> openSplitModal(null);
   const exportBtn=document.getElementById('btn-export'); if(exportBtn) exportBtn.onclick=exportBackup;
   const importBtn=document.getElementById('btn-import'); if(importBtn) importBtn.onclick=importBackup;
+  const exportSplitBtn=document.getElementById('btn-export-split'); if(exportSplitBtn) exportSplitBtn.onclick=()=>exportSplit(split.id);
+  const importSplitBtn=document.getElementById('btn-import-split'); if(importSplitBtn) importSplitBtn.onclick=importSplit;
   const exportExDbBtn=document.getElementById('btn-export-exdb'); if(exportExDbBtn) exportExDbBtn.onclick=exportExerciseDatabase;
   const importExDbBtn=document.getElementById('btn-import-exdb'); if(importExDbBtn) importExDbBtn.onclick=importExerciseDatabase;
   document.querySelectorAll('[data-viewarchive]').forEach(b=> b.onclick = ()=>{
@@ -4510,6 +4843,11 @@ function installBackGuard(){
       history.pushState({ppTab:state.tab}, '', location.href);
       return;
     }
+    if(spIsOpen()){
+      history.pushState({ppTab:state.tab}, '', location.href);
+      closeSplitPreview(false);
+      return;
+    }
     const s = e.state;
     if(s && s.ppTab){
       // Landed on one of our own tab-history entries — just show that tab, no prompt.
@@ -4537,8 +4875,11 @@ function installBackGuard(){
   await loadAll();
   await applySmartLogDefault();
   registerPWA();
+  const sharedText = await takeSharedSplit();
   installBackGuard();
   render();
+  if(typeof sharedText==='string') openSplitPreview(sharedText);
+  else if(sharedText===false) toast("Couldn't read the shared file", 3200);
 })();
 </script>
 </body>
