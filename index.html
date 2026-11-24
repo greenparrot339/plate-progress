@@ -389,6 +389,15 @@
   .bulk-set-row .field-label{margin-bottom:4px;}
   .bulk-set-row input{width:100%;min-width:0;}
   .bulk-set-row .bulk-remove{height:42px;width:42px;padding:0;display:flex;align-items:center;justify-content:center;}
+  .rir-field{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:2px;}
+  .rir-field .rir-label{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;color:var(--text-faint);text-transform:uppercase;white-space:nowrap;}
+  .rir-chips{display:flex;gap:5px;flex:1;}
+  .rir-chip{flex:1;min-width:0;height:30px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-dim);font-family:var(--font-mono);font-size:12px;font-weight:600;touch-action:manipulation;transition:transform .12s ease,background .12s ease,color .12s ease;}
+  .rir-chip:active{transform:scale(.92);}
+  .rir-chip.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+  .rir-chip.on[data-rir="0"]{background:rgba(214,96,64,.16);border-color:#d66040;color:#e8795a;}
+  .set-log-row .rir-tag{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);border:1px solid var(--border);border-radius:6px;padding:1px 5px;margin-left:8px;white-space:nowrap;}
+  .set-log-row .rir-tag.fail{color:#e8795a;border-color:#d66040;}
   .set-type-toggle{height:42px;width:44px;padding:0;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:var(--font-mono);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;touch-action:manipulation;}
   .set-type-toggle.warmup{color:var(--accent);background:var(--accent-dim);border-color:var(--accent);}
   .bulk-set-row.is-warmup{border-left:2px solid var(--accent);background:rgba(232,179,44,.055);}
@@ -503,9 +512,9 @@
   .history-date{font-family:var(--font-display);font-size:14px;letter-spacing:0.03em;text-transform:uppercase;color:var(--text);}
   .history-dayname{font-size:11px;color:var(--text-faint);margin-top:1px;}
   .history-body{border-top:1px solid var(--border);padding-top:10px;margin-top:2px;}
-  .history-exrow{display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:12.5px;}
-  .history-exrow .hx-name{color:var(--text-dim);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .history-exrow .hx-sets{font-family:var(--font-mono);color:var(--text);flex-shrink:0;text-align:right;}
+  .history-exrow{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:5px 0;font-size:12.5px;}
+  .history-exrow .hx-name{color:var(--text-dim);flex:0 1 38%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .history-exrow .hx-sets{font-family:var(--font-mono);color:var(--text);flex:1 1 auto;min-width:0;text-align:right;overflow-wrap:anywhere;line-height:1.5;}
   .history-summary{display:flex;gap:14px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
   .history-summary .hs-item{flex:1;}
   .history-summary .hs-label{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;}
@@ -618,12 +627,16 @@
       <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
     </button>
   </div>
-  <div class="plate-rule"><div class="line"></div><div class="dot" data-dot="0"></div><div class="dot" data-dot="1"></div><div class="dot" data-dot="2"></div><div class="dot" data-dot="3"></div><div class="line"></div></div>
+  <div class="plate-rule"><div class="line"></div><div class="dot" data-dot="0"></div><div class="dot" data-dot="1"></div><div class="dot" data-dot="2"></div><div class="dot" data-dot="3"></div><div class="dot" data-dot="4"></div><div class="line"></div></div>
 </div>
 
 <main id="main"></main>
 
 <div class="navbar">
+  <button class="navbtn" data-tab="home">
+    <svg viewBox="0 0 24 24"><path d="M3 11.5L12 4l9 7.5M5.5 10v9.5h4.5v-5.5h4v5.5h4.5V10" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Home
+  </button>
   <button class="navbtn" data-tab="log">
     <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round" stroke-linejoin="round"/></svg>
     Log
@@ -648,12 +661,15 @@
 <script src="exercise-database.js"></script>
 <script src="stats3d.js"></script>
 <script src="chart-max.js?v=47"></script>
-<script src="strength-intelligence.js?v=1"></script>
-<script src="strength-ui.js?v=3"></script>
+<script src="strength-intelligence.js?v=2"></script>
+<script src="strength-ui.js?v=4"></script>
+<script src="report-engine.js?v=1"></script>
+<script src="report-pdf.js?v=1"></script>
+<script src="home.js?v=1"></script>
 <script>
 /* ============ STATE ============ */
 let DB = { splits: [], exercises: [], sets: [], exerciseClassificationOverrides: {}, exerciseDatabase: null };
-let state = { tab:'log', logDayId:null, logExerciseId:null, logDate:null, logHistoryDate:null, logHistoryOpen:false, splitEditId:null, splitViewId:null, splitViewMode:'list', splitGalleryDayIndex:0, progressSplitId:null, progressExerciseId:null, progressMetric:'e1rm', progressRange:'all', progressDayId:null, progressMode:'exercise', progressDaySessionDate:null, progressSplitAId:null, progressSplitBId:null, progressSplitSharedKey:null, statsRange:'week', statsSelectedGroup:null, stats3dFullscreen:false, stats3dGraphMode:'week', logRenameMode:false };
+let state = { tab:'home', logDayId:null, logExerciseId:null, logDate:null, logHistoryDate:null, logHistoryOpen:false, splitEditId:null, splitViewId:null, splitViewMode:'list', splitGalleryDayIndex:0, progressSplitId:null, progressExerciseId:null, progressMetric:'e1rm', progressRange:'all', progressDayId:null, progressMode:'exercise', progressDaySessionDate:null, progressSplitAId:null, progressSplitBId:null, progressSplitSharedKey:null, statsRange:'week', statsSelectedGroup:null, stats3dFullscreen:false, stats3dGraphMode:'week', logRenameMode:false };
 let DB_META = { lastAutoAssignDate:null };
 let charts = {};
 const $main = document.getElementById('main');
@@ -1282,6 +1298,21 @@ function isWarmupSet(s){ return String(s?.setType||'working').toLowerCase()==='w
 function isWorkingSet(s){ return !isWarmupSet(s); }
 function isCountedLoggedSet(s){ const w=Number(s?.weight), r=Number(s?.reps); return (Number.isFinite(w)&&w>0) || (Number.isFinite(r)&&r>0); }
 function isWorkingPerformanceSet(s){ return isWorkingSet(s) && Number(s?.weight)>0 && Number(s?.reps)>0; }
+/* ---- RIR (reps in reserve) helpers: rir is OPTIONAL on a set (0..5, 5 = "5 or more"); missing = unknown ---- */
+const RIR_MAX = 5;
+function setRir(s){
+  if(!s || s.rir===null || s.rir===undefined || s.rir==='') return null;
+  const v = Number(s.rir);
+  return Number.isFinite(v) && v>=0 ? Math.min(RIR_MAX, Math.round(v)) : null;
+}
+function hasRir(s){ return setRir(s)!==null; }
+// reps you could have reached: what you did + what you left in the tank. Unknown RIR -> just the reps (a lower bound).
+function effectiveReps(s){ const r=Number(s?.reps)||0; const rir=setRir(s); return rir===null ? r : r+rir; }
+// A "hard" set is one taken close to failure. Without RIR we can't tell, so it counts (same as before RIR existed).
+const HARD_SET_RIR = 3;
+function isHardSet(s){ if(!isWorkingSet(s)) return false; const rir=setRir(s); return rir===null || rir<=HARD_SET_RIR; }
+// Share of working sets that carry an RIR value (0..1)
+function rirCoverage(sets){ const w=(sets||[]).filter(isWorkingPerformanceSet); return w.length ? w.filter(hasRir).length/w.length : 0; }
 function setSortValue(s){ const v=String(s?.setNumber??''); const m=v.match(/^w(\d+)$/i); return m ? Number(m[1])-100000 : (Number.isFinite(Number(v)) ? Number(v) : 999999); }
 /* ============ QUERIES ============ */
 function activeSplit(){ return DB.splits.find(s=>!s.archivedAt); }
@@ -1375,7 +1406,7 @@ async function saveMeta(){ try{ await idbSet('appMeta', DB_META); }catch(err){ c
 // This is intentionally distinct from a scheduled split-day template.
 let _sessionsCache = null, _sessionsCacheKey = null;
 function allLoggedSessions(){
-  const cacheKey = DB.sets.map(s=>[s.id,s.date,s.setNumber,s.weight,s.reps,s.setType||'working'].join(':')).join('|') + ':' + DB.exercises.length;
+  const cacheKey = DB.sets.map(s=>[s.id,s.date,s.setNumber,s.weight,s.reps,s.rir??'',s.setType||'working'].join(':')).join('|') + ':' + DB.exercises.length;
   if(_sessionsCache && _sessionsCacheKey===cacheKey) return _sessionsCache;
   const byDate = {};
   DB.sets.forEach(s=>{ (byDate[s.date]=byDate[s.date]||[]).push(s); });
@@ -1404,7 +1435,7 @@ function sessionByDate(date){ return allLoggedSessions().find(s=>s.date===date) 
 let _dayHistoryCache = new Map();
 function historySessionsForDay(dayId){
   if(!dayId) return [];
-  const cacheKey = dayId + '|' + DB.sets.map(s=>[s.id,s.date,s.setNumber,s.weight,s.reps,s.setType||'working'].join(':')).join('|') + '|' + DB.exercises.length;
+  const cacheKey = dayId + '|' + DB.sets.map(s=>[s.id,s.date,s.setNumber,s.weight,s.reps,s.rir??'',s.setType||'working'].join(':')).join('|') + '|' + DB.exercises.length;
   const cached = _dayHistoryCache.get(dayId);
   if(cached && cached.key===cacheKey) return cached.sessions;
 
@@ -1475,12 +1506,13 @@ function setHeader(eyebrow, title, actionSvg, actionFn){
   else { btn.style.display='none'; }
 }
 
-const TAB_ORDER = ['log','split','progress','stats'];
+const TAB_ORDER = ['home','log','split','progress','stats'];
 function render(){
   document.querySelectorAll('.navbtn').forEach(b=> b.classList.toggle('active', b.dataset.tab===state.tab));
   const activeDot = TAB_ORDER.indexOf(state.tab);
   document.querySelectorAll('.plate-rule .dot').forEach(d=> d.classList.toggle('hot', +d.dataset.dot===activeDot));
-  if(state.tab==='log') renderLog();
+  if(state.tab==='home') HomeScreen.render();
+  else if(state.tab==='log') renderLog();
   else if(state.tab==='split') renderSplit();
   else if(state.tab==='progress') renderProgress();
   else if(state.tab==='stats') renderStats();
@@ -1547,7 +1579,7 @@ document.querySelectorAll('.navbtn').forEach(b=>{
     // tab-swipe gesture compete with it.
     if(t.closest('.day-scroll') || t.closest('.chart-wrap') || t.closest('.segmented') ||
        t.closest('select') || t.closest('input') || t.closest('button') || t.closest('.stats3d-wrap') ||
-       t.closest('.split-gallery-track') || t.closest('#gallery-max-overlay') || t.closest('#chart-max-overlay') || t.closest('#si-overlay') || t.closest('#sp-overlay')) return;
+       t.closest('.hm-scroll') || t.closest('.split-gallery-track') || t.closest('#gallery-max-overlay') || t.closest('#chart-max-overlay') || t.closest('#si-overlay') || t.closest('#sp-overlay')) return;
     const touch = e.touches[0];
     sx=touch.clientX; sy=touch.clientY; st=Date.now(); tracking=true;
   }, {passive:true});
@@ -2679,7 +2711,7 @@ function renderLog(){
           return `<div class="set-log-row ${isPr?'pr ':''}${isWarm?'warmup':''}" data-editset="${s.id}" data-exid="${ex.id}">
             <div class="setnum">${esc(isWarm ? (/^W\d+$/i.test(String(s.setNumber||'')) ? String(s.setNumber).toUpperCase() : 'W'+(++logWarmupNo)) : String(s.setNumber))}</div>
             <div class="val weight">${s.weight}<span class="unit">kg</span></div>
-            <div class="val">${s.reps}<span class="unit">reps</span></div>
+            <div class="val">${s.reps}<span class="unit">reps</span>${(!isWarm && setRir(s)!==null) ? `<span class="rir-tag ${setRir(s)===0?'fail':''}" title="Reps in reserve">${setRir(s)===0?'to failure':'RIR '+(setRir(s)>=RIR_MAX?'5+':setRir(s))}</span>` : ''}</div>
             <button class="icon-btn" data-delset="${s.id}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button>
           </div>`;
         }).join('');})()}
@@ -2769,7 +2801,7 @@ function buildHistoryCardHtml(){
 
   const exRows = session.exercises.slice(0,6).map(ex=>{
     const exSets = session.sets.filter(s=>s.exerciseId===ex.id);
-    const summary = exSets.map(s=>`${s.weight}&times;${s.reps}`).join(', ');
+    const summary = exSets.map(s=>`${s.weight}&times;${s.reps}${setRir(s)!==null&&!isWarmupSet(s)?'<span style="opacity:.6">@'+setRir(s)+'</span>':''}`).join(', ');
     return `<div class="history-exrow"><span class="hx-name">${esc(ex.name)}</span><span class="hx-sets">${summary}</span></div>`;
   }).join('') + (session.exercises.length>6 ? `<div class="history-exrow"><span class="hx-name">+${session.exercises.length-6} more</span></div>` : '');
 
@@ -2855,6 +2887,7 @@ function openSetModal(exerciseId, editSetId){
     setNumber: nextSetNum,
     weight: editSet ? editSet.weight : (lastSet ? lastSet.weight : ''),
     reps: editSet ? editSet.reps : (lastSet ? lastSet.reps : ''),
+    rir: editSet ? (setRir(editSet) ?? '') : ((lastSet && !isWarmupSet(lastSet) && setRir(lastSet)!==null) ? setRir(lastSet) : ''),
     setType: editSet ? (editSet.setType||'working') : 'working'
   }];
 
@@ -2928,8 +2961,15 @@ function openSetModal(exerciseId, editSetId){
         <div class="field"><label class="field-label">Weight (kg)</label><input type="number" class="m-row-weight" step="0.5" value="${r.weight}" placeholder="0" inputmode="decimal"></div>
         <div class="field"><label class="field-label">Reps</label><input type="number" class="m-row-reps" value="${r.reps}" placeholder="0" min="1" inputmode="numeric"></div>
         <button type="button" class="icon-btn bulk-remove" data-remove-row="${i}" aria-label="Remove set" title="Remove set"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button>
+        ${warm ? '' : `<div class="rir-field"><span class="rir-label" title="Reps in reserve: how many more reps you could have done">RIR</span><div class="rir-chips" role="group" aria-label="Reps in reserve for set ${i+1}">${[0,1,2,3,4,5].map(v=>`<button type="button" class="rir-chip ${Number(r.rir)===v&&r.rir!==''?'on':''}" data-rir="${v}" data-rir-row="${i}" aria-pressed="${Number(r.rir)===v&&r.rir!==''}">${v===5?'5+':v}</button>`).join('')}</div></div>`}
       </div>`;
     }).join('');
+    listEl.querySelectorAll('.rir-chip').forEach(btn=>btn.onclick=()=>{
+      const i=Number(btn.dataset.rirRow), v=Number(btn.dataset.rir); const r=rows[i]; if(!r) return;
+      r.rir = (r.rir!=='' && Number(r.rir)===v) ? '' : v;   // tap the chosen chip again to clear it
+      btn.closest('.rir-chips').querySelectorAll('.rir-chip').forEach(c=>{ const on=r.rir!=='' && Number(c.dataset.rir)===Number(r.rir); c.classList.toggle('on',on); c.setAttribute('aria-pressed',on); });
+      if(navigator.vibrate) try{ navigator.vibrate(8); }catch(e){}
+    });
 
     listEl.querySelectorAll('.m-row-weight,.m-row-reps').forEach(inp=>inp.oninput=()=>{
       const row=inp.closest('.bulk-set-row'); const i=Number(row.dataset.rowIndex);
@@ -2964,10 +3004,17 @@ function openSetModal(exerciseId, editSetId){
   }
 
   renderSetRows();
+  // Warm-ups never carry RIR. A row's rir is stored only when it is a valid 0..5 number.
+  function rirFromRow(r){ if(r.setType==='warmup' || r.rir==='' || r.rir==null) return null; const v=Number(r.rir); return Number.isFinite(v)&&v>=0 ? Math.min(RIR_MAX,Math.round(v)) : null; }
+  function newSetRecord(r,d){
+    const rec={id:uid('set'),exerciseId,setNumber:r.setNumber,date:d,weight:r.weight,reps:r.reps,setType:r.setType||'working',createdAt:new Date().toISOString()};
+    const rr=rirFromRow(r); if(rr!==null) rec.rir=rr;
+    return rec;
+  }
   document.getElementById('m-close').onclick = closeModal;
   document.getElementById('m-overlay').onclick = e=>{ if(e.target.id==='m-overlay') closeModal(); };
   document.getElementById('m-add-set').onclick = ()=>{
-    rows.push({id:null,setNumber:nextAvailableSetNumber(),weight:rows.length?rows[rows.length-1].weight:(lastSet?lastSet.weight:''),reps:rows.length?rows[rows.length-1].reps:(lastSet?lastSet.reps:''),setType:'working'});
+    rows.push({id:null,setNumber:nextAvailableSetNumber(),weight:rows.length?rows[rows.length-1].weight:(lastSet?lastSet.weight:''),reps:rows.length?rows[rows.length-1].reps:(lastSet?lastSet.reps:''),rir:rows.length?rows[rows.length-1].rir:((lastSet&&!isWarmupSet(lastSet)&&setRir(lastSet)!==null)?setRir(lastSet):''),setType:'working'});
     renderSetRows();
     const inputs=listEl.querySelectorAll('.m-row-weight');
     if(inputs.length) inputs[inputs.length-1].focus();
@@ -3028,12 +3075,13 @@ function openSetModal(exerciseId, editSetId){
     if(editSet){
       const first = rows[0];
       editSet.setNumber = first.setNumber; editSet.weight = first.weight; editSet.reps = first.reps; editSet.setType=first.setType||'working'; editSet.date = d;
+      if(rirFromRow(first)===null) delete editSet.rir; else editSet.rir = rirFromRow(first);
       for(let i=1;i<rows.length;i++){
         const r=rows[i];
-        DB.sets.push({id:uid('set'),exerciseId,setNumber:r.setNumber,date:d,weight:r.weight,reps:r.reps,setType:r.setType||'working',createdAt:new Date().toISOString()});
+        DB.sets.push(newSetRecord(r,d));
       }
     } else {
-      rows.forEach(r=>DB.sets.push({id:uid('set'),exerciseId,setNumber:r.setNumber,date:d,weight:r.weight,reps:r.reps,setType:r.setType||'working',createdAt:new Date().toISOString()}));
+      rows.forEach(r=>DB.sets.push(newSetRecord(r,d)));
     }
     await save('sets');
     state.logDate = d;
@@ -3091,6 +3139,9 @@ function statsForGroupThisWeek(group){
     if(ex.splitId!==split.id) return;
     if(classifyExercise(ex.name)!==group) return;
     if(!isCountedLoggedSet(s)) return;
+    // Volume is counted in HARD sets: working sets taken within ~3 reps of failure. Sets with no RIR
+    // logged still count (we can't tell), warm-ups and clearly easy sets (RIR 4+) do not.
+    if(!isHardSet(s)) return;
     exNames.add(exerciseIdentityKey(ex.name)); days.add(s.date); sets++;
   });
   return {exercises:exNames.size, sets, frequency:days.size};
@@ -3108,7 +3159,7 @@ function statsForGroupActiveSplit(group, structuralFreq){
       // on more than one day of the split.
       if(seenKeys.has(key)) return;
       seenKeys.add(key);
-      sets += setsOfExercise(ex.id).filter(isCountedLoggedSet).length;
+      sets += setsOfExercise(ex.id).filter(x=>isCountedLoggedSet(x) && isHardSet(x)).length;
     });
   });
   return {exercises:seenKeys.size, sets, frequency:(structuralFreq && structuralFreq[group])||0};
@@ -3486,7 +3537,7 @@ function stats3DGraphData(mode){
   if(mode==='split'){
     const vals={};
     STATS_GROUPS.forEach(g=>{ vals[g]=statsForGroupActiveSplit(g, freq).sets; });
-    return {values:vals, unit:'', title:'Split volume', range:'SETS · ALL-TIME'};
+    return {values:vals, unit:'', title:'Split volume', range:'HARD SETS · ALL-TIME'};
   }
   return {values:freq, unit:'×', title:'Weekly frequency', range:'DAYS / WEEK'};
 }
@@ -3579,7 +3630,7 @@ function refreshStatsFloatCard(){
   const rangeLabel = state.statsRange==='week' ? 'this week' : 'in split';
   card.innerHTML = `<div class="f-title">${STATS_LABELS[state.statsSelectedGroup]}</div>
     <div class="f-row"><span>Exercises</span><b>${s.exercises}</b></div>
-    <div class="f-row"><span>Sets</span><b>${s.sets}</b></div>
+    <div class="f-row"><span title="Working sets within ~3 reps of failure (RIR 0-3, or RIR not logged)">Hard sets</span><b>${s.sets}</b></div>
     <div class="f-row"><span>Frequency</span><b>${s.frequency}×</b></div>
     <div class="f-row"><span style="color:var(--text-faint);font-size:10.5px;">${rangeLabel}</span><span></span></div>`;
   card.classList.add('show');
@@ -3742,7 +3793,9 @@ function renderProgressExerciseMode(){
     return a.length%2 ? a[m] : (a[m-1]+a[m])/2;
   }
   function fmtRepValue(v){ return Number.isInteger(v) ? String(v) : Number(v).toFixed(1); }
-  function buildProgressiveOverloadTrend(exerciseSets){
+  let effortAdjustedFlag=false;
+  function _buildProgressiveOverloadTrend(exerciseSets){
+    effortAdjustedFlag=false;
     const grouped={};
     exerciseSets.forEach(s=>{
       const d=s.date;
@@ -3750,7 +3803,7 @@ function renderProgressExerciseMode(){
       const r=Number(s.reps);
       if(!Number.isFinite(w)||!Number.isFinite(r)) return;
       if(!grouped[d]) grouped[d]=[];
-      grouped[d].push({weight:w,reps:r});
+      grouped[d].push({weight:w,reps:r,rir:setRir(s)});
     });
 
     const dates=Object.keys(grouped).sort();
@@ -3764,9 +3817,9 @@ function renderProgressExerciseMode(){
     // The current session is represented by the median reps across every
     // set performed at the tracked weight. This works for 2, 3, 4, 5, etc.
     // sets and prevents one unusually strong final set from masking a dip.
-    const currentReps=median4(currentAtWeight.map(s=>s.reps));
+    let currentReps=median4(currentAtWeight.map(s=>s.reps));
     const currentSetCount=currentAtWeight.length;
-    const currentBestReps=Math.max(...currentAtWeight.map(s=>s.reps));
+    let currentBestReps=Math.max(...currentAtWeight.map(s=>s.reps));
 
     // A genuinely new load is positive progression when it is performed
     // for more than a single rep. This is treated separately from the
@@ -3777,7 +3830,7 @@ function renderProgressExerciseMode(){
     const isNewWeight=previousMaxWeight!=null && currentWeight>previousMaxWeight;
     const newWeightPositive=isNewWeight && currentReps>1;
 
-    const sessionSummary = currentSetCount > 1
+    let sessionSummary = currentSetCount > 1
       ? `Session: ${currentSetCount} sets &middot; Median: ${fmtRepValue(currentReps)} reps${currentBestReps!==currentReps ? ` &middot; Best: ${fmtRepValue(currentBestReps)} reps` : ''}`
       : `Session: 1 set &middot; ${fmtRepValue(currentReps)} reps`;
 
@@ -3797,16 +3850,37 @@ function renderProgressExerciseMode(){
       };
     }
 
-    const rows=dates.map(date=>{
+    let rows=dates.map(date=>{
       const atWeight=grouped[date].filter(s=>s.weight===currentWeight);
       if(!atWeight.length) return null;
+      const eff=atWeight.map(s=>s.reps+(s.rir===null?0:s.rir));
       return {
         date,
         reps:median4(atWeight.map(s=>s.reps)),
         bestReps:Math.max(...atWeight.map(s=>s.reps)),
-        setCount:atWeight.length
+        setCount:atWeight.length,
+        full:atWeight.every(s=>s.rir!==null),            // every set at this weight has an RIR
+        effReps:median4(eff), effBest:Math.max(...eff),
+        medRir:atWeight.every(s=>s.rir!==null) ? median4(atWeight.map(s=>s.rir)) : null
       };
     }).filter(Boolean);
+
+    // EFFORT-AWARE MODE. Reps alone can't tell "8 reps, 1 left in the tank" from "8 reps, 4 left".
+    // Once the latest 5 same-weight sessions ALL have RIR on every set (4 baseline + current), the whole
+    // comparison switches to reps + RIR, and only that contiguous RIR-logged run is used. Sessions
+    // logged before RIR existed are never mixed in, so turning RIR on can't fake a jump in progress.
+    {
+      const run=[]; for(let i=rows.length-1;i>=0 && rows[i].full;i--) run.unshift(rows[i]);
+      if(run.length>=5 && rows[rows.length-1].date===latestDate){
+        effortAdjustedFlag=true;
+        rows=run.map(r=>({...r,reps:r.effReps,bestReps:r.effBest}));
+        const cur=rows[rows.length-1];
+        currentReps=cur.reps; currentBestReps=cur.bestReps;
+        sessionSummary = currentSetCount > 1
+          ? `Session: ${currentSetCount} sets &middot; Median: ${fmtRepValue(currentReps)} reps+RIR (RIR ${fmtRepValue(cur.medRir)})${currentBestReps!==currentReps ? ` &middot; Best: ${fmtRepValue(currentBestReps)}` : ''}`
+          : `Session: 1 set &middot; ${fmtRepValue(currentReps)} reps+RIR (RIR ${fmtRepValue(cur.medRir)})`;
+      }
+    }
 
     const prior=rows.filter(r=>r.date!==latestDate).slice(-4);
     if(prior.length<4){
@@ -3918,6 +3992,15 @@ function renderProgressExerciseMode(){
       baseline,prior,latestDate,followups,confirms,diff,signed,
       html:`<span class="${statusClass}">${status==='watch'?'&darr; Monitoring':status==='maintained'?'&rarr; 0 reps':'&uarr; '+signed+' reps'}</span>`
     };
+  }
+  function buildProgressiveOverloadTrend(exerciseSets){
+    const res=_buildProgressiveOverloadTrend(exerciseSets);
+    res.effortAdjusted=effortAdjustedFlag;
+    if(res.effortAdjusted && typeof res.note==='string'){
+      const [msg,...rest]=res.note.split('|');
+      res.note=[`${msg} Effort-adjusted: reps + RIR.`,...rest].join('|');
+    }
+    return res;
   }
 
 // ---- stats ----
@@ -4348,7 +4431,7 @@ function renderProgressDayMode(){
     <div class="card-title">Session overview</div>
     <div class="stat-grid">
       <div class="stat-tile"><div class="label">Volume</div><div class="value">${Math.round(session.volume).toLocaleString()}<span class="unit">kg</span></div><div class="sub">${volChangePct==null?'first time logged':`<span class="${trendCls(volChangePct)}">${fmtSignedPct(volChangePct)}</span> vs last time`}</div></div>
-      <div class="stat-tile"><div class="label">Working sets</div><div class="value">${session.work.length}</div><div class="sub">${groups.size} exercise${groups.size===1?'':'s'}${session.sets.length>session.work.length?` &middot; ${session.sets.length-session.work.length} warm-up`:''}</div></div>
+      <div class="stat-tile"><div class="label">Working sets</div><div class="value">${session.work.length}</div><div class="sub">${session.work.filter(isHardSet).length} hard${(()=>{ const rr=session.work.filter(hasRir).map(setRir); return rr.length ? ` &middot; avg RIR ${(rr.reduce((a,b)=>a+b,0)/rr.length).toFixed(1)}` : ''; })()} &middot; ${groups.size} exercise${groups.size===1?'':'s'}${session.sets.length>session.work.length?` &middot; ${session.sets.length-session.work.length} warm-up`:''}</div></div>
       <div class="stat-tile"><div class="label">Total reps</div><div class="value">${session.reps}</div><div class="sub">${prevOcc?`${session.reps-prevOcc.reps>=0?'+':''}${session.reps-prevOcc.reps} vs last time`:'&mdash;'}</div></div>
       <div class="stat-tile"><div class="label">PRs</div><div class="value">${prRows.length}</div><div class="sub">${prRows.length?esc(prRows.slice(0,2).map(r=>r.g.ex.name).join(', ')):'none this session'}</div></div>
       <div class="stat-tile"><div class="label">Exercises up</div><div class="value">${cnt.up}<span class="unit"> / ${comparable}</span></div><div class="sub">${cnt.new?cnt.new+' new &middot; ':''}${cnt.down} down</div></div>

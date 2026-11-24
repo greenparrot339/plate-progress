@@ -25,6 +25,13 @@
       curve shape comes from the formulas, and the result says so.
    4. Uncertainty comes from fit residuals shrunk toward a default,
       then from out-of-sample BACKTEST errors once available.
+   4b. EFFORT (RIR, optional per set): a set logged with RIR r is treated as
+      a set of reps + r (what you could have done), not a lower bound. Such
+      sets skip the asymmetric lower-bound penalty and get a small extra
+      weight. Sets without RIR behave exactly as before. The headline 1RM and
+      the fitted model use the effort-adjusted values; the trend/anomaly maths
+      keeps using logged reps so a lift's history stays comparable even if
+      you only started logging RIR recently.
    5. Calibration: the backtest replays history (each top set is
       predicted using only earlier sessions). A systematic bias found
       there is applied (shrunk) to future predictions.
@@ -55,6 +62,9 @@
     sLogPriorSd: 0.25,
     ELogPriorSd: 0.06,
     underPredictPenalty: 1.5,
+    maxRir: 5,              // RIR above this is clamped (5 = "5 or more")
+    exactSetBoost: 1.2,     // a set with RIR logged is a cleaner observation than a bare rep count
+    effMaxReps: 15,         // effort-adjusted reps above this are too far into formula-unreliable territory
     maxLoadGapDays: 60,     // backtest: longer gap => conditions not comparable
     backtestMaxPoints: 30,
     anomalyRatio: 1.30,
@@ -208,7 +218,12 @@
     if (!isNum(w) || !isNum(r) || r <= 0) return { ok: false, why: (isNum(r) && r > 0 && (!isNum(w) || w <= 0)) ? 'bodyweight' : 'invalid' };
     if (w <= 0) return { ok: false, why: 'bodyweight' };
     if (r > CFG.maxReps || w > CFG.maxWeightKg) return { ok: false, why: 'invalid' };
-    return { ok: true, w: w, r: r, day: d };
+    var rir = null;
+    if (s && s.rir !== null && s.rir !== undefined && s.rir !== '') {
+      var rv = Number(s.rir);
+      if (isNum(rv) && rv >= 0) rir = Math.min(CFG.maxRir, Math.round(rv));
+    }
+    return { ok: true, w: w, r: r, day: d, rir: rir };
   }
   function orderValue(s, i) {
     var n = parseFloat(String(s.setNumber == null ? '' : s.setNumber));
@@ -269,7 +284,7 @@
       if (!ids[s.exerciseId]) return;
       var p = parseSet(s);
       if (!p.ok) { ex[p.why] = (ex[p.why] || 0) + 1; return; }
-      (byDate[s.date] = byDate[s.date] || { day: p.day, date: String(s.date).slice(0, 10), sets: [] }).sets.push({ weight: p.w, reps: p.r, ord: orderValue(s, i), created: s.createdAt || '' });
+      (byDate[s.date] = byDate[s.date] || { day: p.day, date: String(s.date).slice(0, 10), sets: [] }).sets.push({ weight: p.w, reps: p.r, rir: p.rir, eff: p.r + (p.rir == null ? 0 : p.rir), ord: orderValue(s, i), created: s.createdAt || '' });
     });
     var sessions = Object.keys(byDate).map(function (d) { return byDate[d]; }).sort(function (a, b) { return a.day - b.day; });
     sessions.forEach(function (se) {
@@ -279,12 +294,13 @@
       se.topSet = null;
       var seenW = [];
       se.sets.forEach(function (s) {
-        s.backoff = s.weight < CFG.backoffRatio * top;
+        s.backoff = s.weight < CFG.backoffRatio * top && !(s.rir != null && s.rir <= 2);
         // 2nd/3rd set at a weight you already did today is fatigued, so it says less about fresh capacity
         s.repeat = seenW.some(function (w) { return Math.abs(w - s.weight) <= 0.25; });
         seenW.push(s.weight);
         if (!se.topSet && s.weight === top) se.topSet = s;
         s.e1rm = setE1(s.weight, s.reps);
+        s.e1rmEff = s.rir == null ? s.e1rm : setE1(s.weight, Math.min(s.eff, CFG.effMaxReps));
       });
       // session estimate: best blended e1RM among sets <=12 reps; fall back to <=20 (flagged)
       var best = null, bestSet = null;
@@ -294,7 +310,14 @@
         se.sets.forEach(function (s) { if (s.reps <= 20 && (best == null || s.e1rm > best)) { best = s.e1rm; bestSet = s; } });
         se.lowQuality = best != null;
       }
+      // effort-adjusted estimate for the session (only differs from `best` when a set carries RIR)
+      var bestE = best, bestES = bestSet;
+      if (best != null && !se.lowQuality) {
+        se.sets.forEach(function (s) { if (s.reps <= 12 && s.eff <= CFG.effMaxReps && s.e1rmEff > bestE) { bestE = s.e1rmEff; bestES = s; } });
+      }
       se.e1rm = best; se.e1rmSet = bestSet; se.anomalous = false;
+      se.e1rmEff = bestE; se.e1rmEffSet = bestES;
+      se.rirSets = se.sets.filter(function (s) { return s.rir != null; }).length;
       se.volume = se.sets.reduce(function (a, s) { return a + s.weight * s.reps; }, 0);
     });
     flagAnomalies(sessions, ex);
@@ -331,7 +354,7 @@
     var recent = us.slice(-8);
     var vals = [], ws = [];
     recent.forEach(function (s) {
-      vals.push(s.e1rm);
+      vals.push(s.e1rmEff != null ? s.e1rmEff : s.e1rm);
       ws.push(recencyWeight(nowD - s.day) * (s.lowQuality ? 0.4 : 1));
     });
     var val = weightedMedian(vals, ws);
@@ -339,16 +362,19 @@
     var madLog = 1.4826 * (median(devs) || 0);
     var sigmaE = clamp(Math.max(0.025, madLog) * Math.sqrt(1 + 2 / recent.length), 0.025, 0.12);
     // representative set = the session estimate closest to the aggregate
-    var rep = recent.slice().sort(function (a, b) { return Math.abs(a.e1rm - val) - Math.abs(b.e1rm - val); })[0].e1rmSet;
+    var repS = recent.slice().sort(function (a, b) { return Math.abs((a.e1rmEff != null ? a.e1rmEff : a.e1rm) - val) - Math.abs((b.e1rmEff != null ? b.e1rmEff : b.e1rm) - val); })[0];
+    var rep = repS.e1rmEffSet || repS.e1rmSet;
+    var repReps = rep.eff != null ? rep.eff : rep.reps;
     return {
       value: val, sigmaE: sigmaE, low: val * Math.exp(-sigmaE), high: val * Math.exp(sigmaE),
       sessionsUsed: recent.length, totalSessions: us.length,
-      representativeSet: { weight: rep.weight, reps: rep.reps },
+      representativeSet: { weight: rep.weight, reps: rep.reps, rir: rep.rir == null ? null : rep.rir },
+      effortAdjusted: rep.rir != null,
       formulas: {
-        epley: calculateEpley1RM(rep.weight, rep.reps),
-        brzycki: calculateBrzycki1RM(rep.weight, rep.reps),
-        lombardi: calculateLombardi1RM(rep.weight, rep.reps),
-        blended: rep.e1rm
+        epley: calculateEpley1RM(rep.weight, repReps),
+        brzycki: calculateBrzycki1RM(rep.weight, repReps),
+        lombardi: calculateLombardi1RM(rep.weight, repReps),
+        blended: rep.e1rmEff != null ? rep.e1rmEff : rep.e1rm
       }
     };
   }
@@ -360,10 +386,12 @@
       var age = nowD - s.day;
       if (age > CFG.fitMaxDays) return;
       s.sets.forEach(function (st) {
-        if (st.reps > 20) return;
-        var q = repQuality(st.reps);
-        var W = recencyWeight(age) * q * (st.backoff ? CFG.backoffFactor : 1) * (st.repeat ? CFG.repeatFactor : 1);
-        out.push({ w: st.weight, r: st.reps, W: W, day: s.day, backoff: st.backoff });
+        var obs = st.eff != null ? st.eff : st.reps;     // reps you could have reached when RIR is known
+        if (obs > 20) return;
+        var exact = st.rir != null;
+        var q = repQuality(obs);
+        var W = recencyWeight(age) * q * (st.backoff ? CFG.backoffFactor : 1) * (st.repeat ? CFG.repeatFactor : 1) * (exact ? CFG.exactSetBoost : 1);
+        out.push({ w: st.weight, r: obs, W: W, day: s.day, backoff: st.backoff, exact: exact });
       });
     });
     out.sort(function (a, b) { return b.day - a.day; });
@@ -411,7 +439,7 @@
             var m = st2.w / Ev > 1 ? 0.3 : Math.max(0.3, 1 + sv * (rps[n] - 1));
             var e = Math.log(st2.r) - Math.log(m);
             var l = st2.W * e * e / s0sq;
-            if (e > 0) l *= CFG.underPredictPenalty;
+            if (e > 0 && !st2.exact) l *= CFG.underPredictPenalty;
             loss += l;
           }
           if (loss < best) { best = loss; bestE = Ev; bestS = sv; }
@@ -429,21 +457,26 @@
     var sigmaFit = sumW > 0 ? Math.sqrt(sumSq / sumW) : CFG.sigma0;
     var nEff = Math.min(sets.length, sumW * 2);
     var sigma = Math.sqrt((nEff * sigmaFit * sigmaFit + CFG.sigmaPriorN * CFG.sigma0 * CFG.sigma0) / (nEff + CFG.sigmaPriorN));
-    var bias = 0, btN = 0, sigmaBt = null;
+    var bias = 0, btN = 0, sigmaBt = null, rirShare = 0;
     var cal = opts.backtest;
     if (cal && cal.points && cal.points.length) {
       btN = cal.points.length;
       var logs = cal.points.map(function (p) { return p.logError; });
       sigmaBt = Math.sqrt(logs.reduce(function (a, v) { return a + v * v; }, 0) / btN);
       sigma = Math.sqrt((2 * btN * sigmaBt * sigmaBt + nEff * sigma * sigma) / (2 * btN + nEff));
-      if (btN >= 6) bias = clamp(median(logs) * btN / (btN + 8), -0.2, 0.2);
+      // the systematic lower-bound bias only exists for sets without RIR, so learn it from those
+      // alone and fade it out as more of the recent data carries RIR
+      var lbLogs = cal.points.filter(function (p) { return !p.exact; }).map(function (p) { return p.logError; });
+      var exW = 0, allW = 0; sets.forEach(function (x) { allW += x.W; if (x.exact) exW += x.W; });
+      rirShare = allW > 0 ? exW / allW : 0;
+      if (lbLogs.length >= 6) bias = clamp(median(lbLogs) * lbLogs.length / (lbLogs.length + 8), -0.2, 0.2) * (1 - rirShare);
     }
     sigma = clamp(sigma, CFG.sigmaFloor, CFG.sigmaCap);
 
     var wts = sets.map(function (x) { return x.w; });
     return {
       version: VERSION,
-      E: E, E0: est.value, s: s, sigma: sigma, sigmaE: est.sigmaE, bias: bias,
+      E: E, E0: est.value, s: s, sigma: sigma, sigmaE: est.sigmaE, bias: bias, rirShare: rirShare,
       formulaOnly: !fitE, personalizedShape: fitS,
       eLow: E * Math.exp(-est.sigmaE), eHigh: E * Math.exp(est.sigmaE),
       loadRange: wts.length ? { min: Math.min.apply(null, wts), max: Math.max.apply(null, wts) } : { min: E * 0.6, max: E * 0.9 },
@@ -613,7 +646,7 @@
       if (se.day - prev.day > CFG.maxLoadGapDays) { skipped.push({ date: se.date, reason: 'long gap since previous session' }); continue; }
       var recentTop = prior.slice(-8).map(function (s) { return s.topWeight; });
       var tmin = Math.min.apply(null, recentTop), tmax = Math.max.apply(null, recentTop);
-      var w = se.topSet.weight, r = se.topSet.reps;
+      var w = se.topSet.weight, r = se.topSet.eff != null ? se.topSet.eff : se.topSet.reps, exactTop = se.topSet.rir != null;
       if (w < tmin * 0.8 || w > tmax * 1.25) { skipped.push({ date: se.date, reason: 'weight differs materially from recent training' }); continue; }
       if (r > 20) { skipped.push({ date: se.date, reason: 'very high reps' }); continue; }
       var model = fitModel(sliceHistory(history, k), { now: se.day - 0 });
@@ -625,7 +658,7 @@
       var predExact = Math.max(0.5, pr.repsExact);
       points.push({
         date: se.date, day: se.day, weight: w, actual: r, predicted: pr.reps, predictedExact: pr.repsExact, low: pr.low, high: pr.high,
-        error: r - pr.reps, logError: Math.log(r) - Math.log(predExact), inRange: r >= pr.low && r <= pr.high
+        error: r - pr.reps, logError: Math.log(r) - Math.log(predExact), inRange: r >= pr.low && r <= pr.high, exact: exactTop
       });
     }
     points = points.slice(-CFG.backtestMaxPoints);
@@ -672,14 +705,19 @@
     if (cv != null) reasons.push({ ok: cv <= 0.07, text: 'Session-to-session variation ' + fix(cv * 100, 1) + '%' + (cv <= 0.07 ? '' : ' — fairly inconsistent') });
     if (s.n >= 3) reasons.push({ ok: s.medianAbsLogError <= 0.2, text: 'Back-test over ' + s.n + ' past sessions: typically ' + fix(s.medianAbsRepError, 1) + ' rep' + (s.medianAbsRepError === 1 ? '' : 's') + ' off, ' + Math.round(s.within1Rep * 100) + '% within ±1 rep' });
     else reasons.push({ ok: false, text: 'Too few past sessions to back-test the predictions yet' });
-    reasons.push({ ok: null, text: 'Sets are not tagged with effort. Stopping short of failure makes predictions lean conservative.' });
+    var allS = 0, rirS = 0;
+    history.sessions.forEach(function (se) { se.sets.forEach(function (x) { allS++; if (x.rir != null) rirS++; }); });
+    var cov = allS ? rirS / allS : 0;
+    if (cov >= 0.6) reasons.push({ ok: true, text: 'Effort (RIR) logged on ' + Math.round(cov * 100) + '% of sets, so predictions reflect what you could have done, not just what you did' });
+    else if (rirS > 0) reasons.push({ ok: null, text: 'Effort (RIR) logged on ' + Math.round(cov * 100) + '% of sets. Logging it on more sets makes predictions sharper' });
+    else reasons.push({ ok: null, text: 'Sets are not tagged with effort (RIR). Stopping short of failure makes predictions lean conservative.' });
 
     var level, label;
     if (sessions < 2 || sets < 3) { level = 'insufficient'; label = 'Insufficient data'; }
     else if (sessions >= 10 && s.n >= 8 && s.medianAbsLogError <= 0.12 && s.within1Rep >= 0.55 && daysSince <= 45 && (cv == null || cv <= 0.07)) { level = 'well-calibrated'; label = 'Well calibrated'; }
     else if (sessions >= 5 && sets >= 10 && daysSince <= 90 && s.n >= 3 && s.medianAbsLogError <= 0.25) { level = 'moderate'; label = 'Moderate'; }
     else { level = 'preliminary'; label = 'Preliminary'; }
-    return { level: level, label: label, reasons: reasons, sessions: sessions, sets: sets, daysSinceLast: daysSince, variation: cv, backtest: s };
+    return { level: level, label: label, reasons: reasons, sessions: sessions, sets: sets, daysSinceLast: daysSince, variation: cv, backtest: s, rirCoverage: cov };
   }
 
   /* ---------- forecast ---------- */
@@ -743,7 +781,8 @@
       var match = null;
       for (var j = 0; j < next.sets.length; j++) if (Math.abs(next.sets[j].weight - rec.weight) <= rec.weight * 0.02) { match = next.sets[j]; break; }
       if (!match) { out.status = 'not-comparable'; out.reason = 'weight changed'; return out; }
-      out.status = 'resolved'; out.actual = match.reps; out.error = match.reps - rec.expected; out.inRange = match.reps >= rec.low && match.reps <= rec.high;
+      var act = match.eff != null ? match.eff : match.reps;   // like-for-like when the set has RIR
+      out.status = 'resolved'; out.actual = act; out.error = act - rec.expected; out.inRange = act >= rec.low && act <= rec.high;
       return out;
     });
   }
@@ -775,7 +814,7 @@
     us.filter(function (s) { return nowD - s.day <= 120; }).forEach(function (s) {
       if (!s.topSet) return;
       var k = Math.round(s.topWeight * 4) / 4;
-      (byW[k] = byW[k] || []).push({ reps: s.topSet.reps, date: s.date });
+      (byW[k] = byW[k] || []).push({ reps: s.topSet.reps, eff: s.topSet.eff, rir: s.topSet.rir, date: s.date });
     });
     var bestW = null;
     Object.keys(byW).forEach(function (k) {
@@ -783,9 +822,18 @@
       if (arr.length >= 3 && (!bestW || +k > bestW.w)) bestW = { w: +k, arr: arr };
     });
     if (bestW) {
-      var r = bestW.arr.map(function (x) { return x.reps; }), recentR = r.slice(-3), firstR = r.slice(0, Math.max(1, r.length - 3));
+      // effort-aware only when EVERY session in the run has RIR, so starting to log it can't fake progress
+      var allRir = bestW.arr.every(function (x) { return x.rir != null; });
+      var r = bestW.arr.map(function (x) { return allRir ? x.eff : x.reps; }), recentR = r.slice(-3), firstR = r.slice(0, Math.max(1, r.length - 3));
+      if (allRir && bestW.arr.length >= 3) {
+        var rawR = bestW.arr.map(function (x) { return x.reps; }), rirR = bestW.arr.map(function (x) { return x.rir; });
+        var rawGain = median(rawR.slice(-3)) - median(rawR.slice(0, Math.max(1, rawR.length - 3)));
+        var rirGain = median(rirR.slice(-3)) - median(rirR.slice(0, Math.max(1, rirR.length - 3)));
+        if (Math.abs(rawGain) < 0.5 && rirGain >= 1) out.push({ id: 'same-weight-easier', type: 'positive', title: 'Same weight, easier', detail: 'At ' + fix(bestW.w, 1) + ' kg you are getting the same reps with more left in reserve (RIR ' + rirR.join(' → ') + '). That is progress even though the rep count is flat.' });
+        else if (Math.abs(rawGain) < 0.5 && rirGain <= -1) out.push({ id: 'same-weight-harder', type: 'caution', title: 'Same reps, but harder', detail: 'At ' + fix(bestW.w, 1) + ' kg the reps are flat while effort rose (RIR ' + rirR.join(' → ') + '). Keep an eye on recovery and sleep.' });
+      }
       var gain = median(recentR) - median(firstR.length ? firstR : [r[0]]);
-      if (r.length >= 3 && r[r.length - 1] - r[0] >= 1 && gain >= 0.5) out.push({ id: 'same-weight-reps', type: 'positive', title: 'More reps at the same weight', detail: 'At ' + fix(bestW.w, 1) + ' kg your top set went ' + r.join(' → ') + ' reps over ' + r.length + ' sessions — progressive overload without adding load.' });
+      if (r.length >= 3 && r[r.length - 1] - r[0] >= 1 && gain >= 0.5) out.push({ id: 'same-weight-reps', type: 'positive', title: 'More reps at the same weight', detail: 'At ' + fix(bestW.w, 1) + ' kg your top set went ' + r.join(' → ') + (allRir ? ' reps (reps + RIR)' : ' reps') + ' over ' + r.length + ' sessions — progressive overload without adding load.' });
       else if (r.length >= 4 && r[r.length - 1] - r[0] <= -2) out.push({ id: 'same-weight-down', type: 'caution', title: 'Fewer reps at the same weight', detail: 'At ' + fix(bestW.w, 1) + ' kg your top set went ' + r.join(' → ') + ' reps. This can reflect fatigue, a lighter-effort day, or a real dip.' });
     }
 
@@ -869,6 +917,7 @@
     if (m.formulaOnly) parts.push('Not enough history to personalise: this is a formula-only estimate (Epley, Brzycki and Lombardi blended by rep range).');
     else if (m.personalizedShape) parts.push('The weight-to-reps curve was fitted to your own loads' + (Math.abs(Math.log(m.s)) > 0.1 ? (m.s > 1 ? ' — you tend to get more reps at lighter loads than the formulas assume.' : ' — you tend to get fewer reps at lighter loads than the formulas assume.') : ', and closely follows the standard formulas.'));
     else parts.push('Your 1RM is personalised, but the curve shape comes from the standard formulas because your logs cover few distinct weights.');
+    if (m.rirShare > 0.05) parts.push('Sets with RIR logged are read as reps + RIR (' + Math.round(m.rirShare * 100) + '% of the weighting in this fit).');
     if (m.backtestN >= 3) parts.push('Spread of the range is calibrated on ' + m.backtestN + ' back-tested sessions.' + (Math.abs(m.bias) > 0.02 ? ' A small correction for past under/over-prediction was applied.' : ''));
     return parts.join(' ');
   }

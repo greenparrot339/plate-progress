@@ -80,7 +80,7 @@ window.StrengthUI = (function () {
   function data() { return dataFor(resolveScope(curScope)); }
   function dataSig(key) {
     var d = data(), h = 0, n = scopeKey().length, s = d.sets || [];
-    for (var i = 0; i < s.length; i++) { var x = s[i]; n++; var t = x.id + '|' + x.exerciseId + '|' + x.date + '|' + x.weight + '|' + x.reps + '|' + (x.setType || ''); for (var j = 0; j < t.length; j++) h = (h * 31 + t.charCodeAt(j)) | 0; }
+    for (var i = 0; i < s.length; i++) { var x = s[i]; n++; var t = x.id + '|' + x.exerciseId + '|' + x.date + '|' + x.weight + '|' + x.reps + '|' + (x.rir == null ? '' : x.rir) + '|' + (x.setType || ''); for (var j = 0; j < t.length; j++) h = (h * 31 + t.charCodeAt(j)) | 0; }
     var e = d.exercises || []; for (var k = 0; k < e.length; k++) { var q = e[k].id + e[k].name; for (var m = 0; m < q.length; m++) h = (h * 31 + q.charCodeAt(m)) | 0; }
     return scopeKey() + ':' + n + ':' + h;
   }
@@ -486,7 +486,7 @@ window.StrengthUI = (function () {
   }
   function formulaTable(m) {
     var f = m.estimate.formulas, rs = m.estimate.representativeSet;
-    return '<p style="margin-bottom:4px">1RM by formula, from a representative set (' + fwu(rs.weight) + ' × ' + rs.reps + '):</p><table class="si-table"><tr><th>Formula</th><th>Epley</th><th>Brzycki</th><th>Lombardi</th><th>Blend</th></tr><tr><td>1RM</td><td>' + fw(f.epley) + '</td><td>' + (isFinite(f.brzycki) ? fw(f.brzycki) : '—') + '</td><td>' + fw(f.lombardi) + '</td><td>' + fw(f.blended) + '</td></tr></table>';
+    return '<p style="margin-bottom:4px">1RM by formula, from a representative set (' + fwu(rs.weight) + ' × ' + rs.reps + (rs.rir != null ? ' + ' + rs.rir + ' RIR = ' + (rs.reps + rs.rir) + ' reps' : '') + '):</p><table class="si-table"><tr><th>Formula</th><th>Epley</th><th>Brzycki</th><th>Lombardi</th><th>Blend</th></tr><tr><td>1RM</td><td>' + fw(f.epley) + '</td><td>' + (isFinite(f.brzycki) ? fw(f.brzycki) : '—') + '</td><td>' + fw(f.lombardi) + '</td><td>' + fw(f.blended) + '</td></tr></table>';
   }
 
   /* ---------- CURVE pane ---------- */

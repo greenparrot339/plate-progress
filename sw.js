@@ -1,6 +1,6 @@
-const CACHE_NAME = 'plate-progress-v51-split-share';
+const CACHE_NAME = 'plate-progress-v53-home';
 const APP_SHELL = [
-  './', './index.html', './manifest.json', './exercise-database.js', './stats3d.js', './chart-max.js?v=47', './strength-intelligence.js?v=1', './strength-ui.js?v=3', './body.glb',
+  './', './index.html', './manifest.json', './exercise-database.js', './stats3d.js', './chart-max.js?v=47', './strength-intelligence.js?v=2', './strength-ui.js?v=4', './report-engine.js?v=1', './report-pdf.js?v=1', './home.js?v=1', './body.glb',
   './icon-192.png', './icon-512.png'
 ];
 

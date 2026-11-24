@@ -22,7 +22,8 @@ function build(spec, extra) {
   const sets = [];
   spec.forEach((s, i) => s.sets.forEach((x, j) => sets.push({
     id: 'set' + (uidn++), exerciseId: (s.ex || (i % 2 ? 'ex1b' : 'ex1')), setNumber: j + 1, date: s.date,
-    weight: x[0], reps: x[1], setType: x[2] || 'working', createdAt: s.date + 'T10:00:00Z'
+    weight: x[0], reps: x[1], setType: x[2] || 'working', createdAt: s.date + 'T10:00:00Z',
+    ...(x[3] !== undefined ? { rir: x[3] } : {})
   })));
   (extra || []).forEach(x => sets.push(x));
   return { exercises, sets };
@@ -239,6 +240,71 @@ test('7/30/90/all ranges filter correctly', () => {
   const a = SI.analyze(d, KEY, { now: addDays('2026-02-01', 101) });
   assert.strictEqual(a.trends['7'].nSessions, 1); assert.strictEqual(a.trends['30'].nSessions, 1); assert.strictEqual(a.trends['90'].nSessions, 3); assert.strictEqual(a.trends['all'].nSessions, 5);
   assert.strictEqual(a.trends['7'].direction, 'insufficient');
+});
+
+
+console.log('RIR (reps in reserve)');
+const rirSessions = (rir, n = 8, w = 100, r = 8) => Array.from({ length: n }, (_, i) => ({ date: addDays('2026-03-01', i * 4), sets: [[w, r, 'working', rir], [w, r, 'working', rir], [w, r, 'working', rir]] }));
+const noRir = (n = 8, w = 100, r = 8) => Array.from({ length: n }, (_, i) => ({ date: addDays('2026-03-01', i * 4), sets: [[w, r], [w, r], [w, r]] }));
+const NOW2 = addDays('2026-03-01', 8 * 4 + 1);
+test('RIR sets are read as reps + RIR: 100x8 @RIR2 estimates like 100x10', () => {
+  const a = SI.analyze(build(rirSessions(2)), KEY, { now: NOW2 });
+  near(a.model.estimate.value, 100 * SI.blendFactor(10), 0.01 * 100 * SI.blendFactor(10), 'effort-adjusted 1RM');
+});
+test('same logged sets with RIR give a higher 1RM than without', () => {
+  const a = SI.analyze(build(rirSessions(2)), KEY, { now: NOW2 }), b = SI.analyze(build(noRir()), KEY, { now: NOW2 });
+  assert.ok(a.model.estimate.value > b.model.estimate.value * 1.03, a.model.estimate.value + ' vs ' + b.model.estimate.value);
+});
+test('RIR 0 (to failure) changes nothing versus no RIR', () => {
+  const a = SI.analyze(build(rirSessions(0)), KEY, { now: NOW2 }), b = SI.analyze(build(noRir()), KEY, { now: NOW2 });
+  near(a.model.estimate.value, b.model.estimate.value, b.model.estimate.value * 0.005);
+});
+test('history trend values stay on logged reps (comparable with old sessions)', () => {
+  const a = SI.analyze(build(rirSessions(3)), KEY, { now: NOW2 });
+  a.history.sessions.forEach(se => { near(se.e1rm, 100 * SI.blendFactor(8), 1e-6); assert.ok(se.e1rmEff > se.e1rm); });
+});
+test('RIR is clamped to 0..5 and junk is ignored', () => {
+  const d = build([{ date: '2026-03-01', sets: [[100, 5, 'working', 9], [100, 5, 'working', 'x'], [100, 5, 'working', -2], [100, 5, 'working', null], [100, 5, 'working', '']] }]);
+  const h = SI.getExerciseHistory(d, KEY, {});
+  const rirs = h.sessions[0].sets.map(x => x.rir).sort();
+  assert.deepStrictEqual(h.sessions[0].sets.map(x => x.rir).filter(x => x != null), [5], 'only the valid (clamped) value survives: ' + JSON.stringify(rirs));
+});
+test('warm-up sets never contribute, even with RIR', () => {
+  const d = build([{ date: '2026-03-01', sets: [[60, 10, 'warmup', 4], [100, 5, 'working', 1]] }]);
+  assert.strictEqual(SI.getExerciseHistory(d, KEY, {}).sessions[0].sets.length, 1);
+});
+test('a lighter set taken within 2 reps of failure is not treated as a back-off', () => {
+  const d = build([{ date: '2026-03-01', sets: [[100, 5, 'working', 1], [80, 10, 'working', 1], [80, 10, 'working']] }]);
+  const st = SI.getExerciseHistory(d, KEY, {}).sessions[0].sets;
+  assert.strictEqual(st[1].backoff, false); assert.strictEqual(st[2].backoff, true);
+});
+test('confidence reports RIR coverage', () => {
+  const a = SI.analyze(build(rirSessions(2)), KEY, { now: NOW2 });
+  near(a.confidence.rirCoverage, 1, 1e-9);
+  assert.ok(a.confidence.reasons.some(r => /RIR/.test(r.text) && r.ok === true));
+  const b = SI.analyze(build(noRir()), KEY, { now: NOW2 });
+  assert.strictEqual(b.confidence.rirCoverage, 0);
+});
+test('forecast is judged like-for-like when the later set has RIR', () => {
+  const d = build([{ date: '2026-03-01', sets: [[100, 8]] }, { date: '2026-03-05', sets: [[100, 8, 'working', 2]] }]);
+  const h = SI.getExerciseHistory(d, KEY, {});
+  const out = SI.evaluateForecastLog([{ key: KEY, status: 'pending', basisDate: '2026-03-01', weight: 100, expected: 10, low: 9, high: 11 }], h)[0];
+  assert.strictEqual(out.status, 'resolved'); assert.strictEqual(out.actual, 10); assert.strictEqual(out.inRange, true);
+});
+test('insight: flat reps but rising RIR at the same weight reads as progress', () => {
+  const spec = [4, 4, 3, 2, 1, 1].map((r, i) => ({ date: addDays('2026-03-01', i * 4), sets: [[100, 8, 'working', 5 - r]] }));
+  const a = SI.analyze(build(spec), KEY, { now: addDays('2026-03-01', 6 * 4) });
+  assert.ok(a.insights.some(x => x.id === 'same-weight-easier'), JSON.stringify(a.insights.map(x => x.id)));
+});
+test('insight: starting to log RIR does not fake a rep gain', () => {
+  const spec = [0, 1, 2, 3, 4, 5].map((n, i) => ({ date: addDays('2026-03-01', i * 4), sets: [[100, 8, 'working', i >= 3 ? 3 : undefined]] }));
+  const a = SI.analyze(build(spec), KEY, { now: addDays('2026-03-01', 6 * 4) });
+  assert.ok(!a.insights.some(x => x.id === 'same-weight-reps'), 'no spurious "more reps" from RIR appearing');
+});
+test('sets without RIR behave exactly as before (no rir field anywhere)', () => {
+  const a = SI.analyze(build(noRir()), KEY, { now: NOW2 });
+  assert.ok(a.history.sessions.every(se => se.e1rmEff === se.e1rm && se.rirSets === 0));
+  assert.strictEqual(a.model.rirShare, 0);
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
