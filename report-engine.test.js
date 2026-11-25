@@ -53,8 +53,17 @@ function world(opts) {
 console.log('Report engine');
 test('too little data is reported, not guessed', () => {
   const r = RE.build({ today, exercises: [{ id: 'e', name: 'Bench Press', dayId: 'd' }], sets: [{ id: '1', exerciseId: 'e', date: today, weight: 60, reps: 8 }], splits: [], classify, muscleOf });
-  assert.strictEqual(r.insufficient, true); assert.ok(r.limits[0].includes('1 logged session'));
+  assert.strictEqual(r.insufficient, true); assert.ok(r.limits[0].includes('1 working set'));
   assert.deepStrictEqual(r.priorities, []);
+});
+test('two sets are enough to build a report (flagged as early), with no junk text', () => {
+  const ex = [{ id: 'e', name: 'Bench Press', dayId: 'd' }];
+  const r = RE.build({ today, exercises: ex, sets: [{ id: '1', exerciseId: 'e', date: today, weight: 60, reps: 8 }, { id: '2', exerciseId: 'e', date: today, weight: 60, reps: 8 }], splits: [], classify, muscleOf });
+  assert.strictEqual(r.insufficient, false); assert.strictEqual(r.limited, true);
+  const txt = JSON.stringify([r.findings, r.graphs, r.priorities, r.doList, r.dontList]);
+  assert.ok(!/NaN|undefined|Infinity|null%/.test(txt), (txt.match(/.{30}(NaN|undefined|Infinity|null%).{30}/) || [''])[0]);
+  const r3 = RE.build({ today, exercises: ex, sets: [{ id: '1', exerciseId: 'e', date: today, weight: 60, reps: 8, setType: 'warmup' }, { id: '2', exerciseId: 'e', date: today, weight: 60, reps: 8 }], splits: [], classify, muscleOf });
+  assert.strictEqual(r3.insufficient, true);   // a warm-up is not a working set
 });
 test('hard sets exclude warm-ups and RIR 4+', () => {
   const I = RE._internals;

@@ -93,13 +93,13 @@
     var dates = uniq(work.map(function (x) { return x.d; })).sort(function (a, b) { return a - b; });
     var rep = {
       today: ctx.today, generatedOn: ctx.today, splitName: split ? split.name : null,
-      insufficient: dates.length < 3, findings: [], limits: []
+      insufficient: work.length < 2, limited: dates.length < 3, findings: [], limits: []
     };
     rep.snapshot = snapshot(work, perf, dates, T, key);
     rep.records = records(perf, T, 12);
     if (rep.insufficient) {
       rep.priorities = []; rep.doList = []; rep.dontList = []; rep.going = []; rep.graphs = [];
-      rep.limits.push('There are only ' + plural(dates.length, 'logged session') + ' so far. Log at least 3 sessions (ideally 4 weeks) and the report will have enough to work with.');
+      rep.limits.push('Only ' + plural(work.length, 'working set') + ' logged so far. Log a couple of sets and the report unlocks; a few weeks of data makes it far sharper.');
       return rep;
     }
 
@@ -118,6 +118,7 @@
     var deload = deloadFinding(C, W, L);
     if (deload) rep.findings.push(deload);
 
+    rep.findings.forEach(addScience);
     rep.findings.sort(function (a, b) { return b.score - a.score; });
     rep.priorities = pickPriorities(rep.findings);
     rep.doList = uniqStr(rep.findings.filter(function (f) { return f.severity !== 'good' && f.action; }).map(function (f) { return f.action; })).slice(0, 10);
@@ -466,12 +467,28 @@
   }
 
   /* ---------- pick the three priorities ---------- */
+
+  /* one-line science behind each kind of advice (shown in the PDF) */
+  var SCI = [
+    [/^(under|missing)-/, 'Muscle growth follows weekly hard sets per muscle; about 10-20 is the productive range and below it growth is noticeably smaller.', 'Strong evidence'],
+    [/^over-/, 'Returns shrink sharply beyond roughly 20 weekly sets while fatigue keeps rising.', 'Strong evidence'],
+    [/^freq-/, 'Training a muscle about twice a week lets you spread the same weekly sets over fresher sessions.', 'Moderate evidence'],
+    [/^(push-pull|pull-push|quad-dominant|post-dominant|legs-lag)/, 'Balanced weekly sets keep every muscle in its growth range and joints happier; the exact ratios are coaching rules, not studied cut-offs.', 'Practical guideline'],
+    [/^no-legs/, 'Legs are the largest muscle group and need their own weekly hard sets like any other.', 'Strong evidence'],
+    [/^rir-/, 'Growth comes mostly from sets taken within about 0-3 reps of failure; failure on every set adds fatigue without clear extra growth.', 'Strong evidence'],
+    [/^(stall|regress|jump|highrep|up)-/, 'Progressive overload (more reps or weight over time) is the signal that keeps muscle growing; stalls usually trace to effort, volume or recovery.', 'Strong evidence'],
+    [/^(consistency|gap|skipped)/, 'Weekly volume per muscle only adds up if sessions actually happen; consistency beats any single workout.', 'Strong evidence'],
+    [/^time-off/, 'Muscle and strength are kept for a few weeks off and return quickly, but easing back in lowers soreness and injury risk.', 'Moderate evidence'],
+    [/^(volume-|deload)/, 'Raise volume gradually and plan lighter weeks when performance drops; exact numbers are coaching practice with limited trial evidence.', 'Practical guideline']
+  ];
+  function addScience(f) { for (var i = 0; i < SCI.length; i++) if (SCI[i][0].test(f.id)) { f.why = SCI[i][1]; f.level = SCI[i][2]; return; } }
+
   function pickPriorities(findings) {
     var out = [], areas = {}, seen = {};
     var cand = findings.filter(function (f) { return f.severity !== 'good' && f.action && f.check; });
     cand.forEach(function (f) { if (out.length < 3 && !areas[f.area]) { out.push(f); areas[f.area] = 1; seen[f.id] = 1; } });
     cand.forEach(function (f) { if (out.length < 3 && !seen[f.id]) { out.push(f); seen[f.id] = 1; } });
-    return out.map(function (f) { return { id: f.id, area: f.area, title: f.title, action: f.action, check: f.check, evidence: f.evidence }; });
+    return out.map(function (f) { return { id: f.id, area: f.area, title: f.title, action: f.action, check: f.check, evidence: f.evidence, why: f.why, level: f.level }; });
   }
 
   /* ---------- graph-by-graph readings ---------- */

@@ -49,7 +49,7 @@
       today: todayStr(), exercises: DB.exercises, sets: DB.sets, splits: DB.splits, meta: DB_META,
       classify: function (n) { try { return classifyExercise(n); } catch (e) { return null; } },
       muscleOf: function (n) { try { var r = builtInExerciseRecord(n); return r && r.primary_muscle ? String(r.primary_muscle).toLowerCase() : null; } catch (e) { return null; } },
-      identityKey: exerciseIdentityKey, isRestDayName: isRestDayName, SI: window.StrengthIntelligence || null
+      identityKey: exerciseIdentityKey, isRestDayName: isRestDayName, SI: window.StrengthIntelligence || null, ReportEngine: window.ReportEngine || null
     };
   }
   function dataKey() {
@@ -70,16 +70,16 @@
     if (split) return Math.max(2, Math.min(7, (split.days || []).filter(function (d) { return !isRestDay(d); }).length)) || 3;
     return 3;
   }
-  // Same rotation rule the Log tab uses: the day after the most recently logged one.
+  // Same rule the Log tab uses (scheduledDay in index.html): the split follows the calendar,
+  // so a skipped day is "missed" and today shows the day after it.
   function plannedDay(split, sessions, today) {
     if (!split || !(split.days || []).length) return null;
     var ids = split.days.map(function (d) { return d.id; });
     var inSplit = sessions.filter(function (s) { return ids.indexOf(s.dayId) >= 0 && s.date <= today; });
     var doneToday = inSplit.filter(function (s) { return s.date === today; })[0] || null;
-    if (doneToday) return { day: dayById(doneToday.dayId), done: doneToday };
-    if (!inSplit.length) return { day: split.days[0], done: null };
-    var last = inSplit[inSplit.length - 1], idx = ids.indexOf(last.dayId);
-    return { day: split.days[(idx + 1) % ids.length], done: null };
+    if (doneToday) return { day: dayById(doneToday.dayId), done: doneToday, missed: [] };
+    var sd = scheduledDay(split, inSplit, today);
+    return { day: split.days[sd.idx], done: null, missed: sd.missed.map(function (m) { return { day: dayById(m.dayId), daysAgo: m.daysAgo }; }).filter(function (m) { return m.day; }).reverse() };
   }
   function sessionStats(s) {
     var work = s.sets.filter(function (x) { return !isWarmupSet(x) && isCountedLoggedSet(x); });
@@ -96,6 +96,7 @@
   var I = {
     flame: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2s5 4.2 5 9.2c0 1.2-.4 2.1-.9 2.8.1-1.6-.8-3-2.1-3.8.3 2-.6 3.3-1.6 4.3-1.2 1.2-2.4 2.1-2.4 4.1A4.9 4.9 0 0 0 12 22a6.5 6.5 0 0 0 6.5-6.6C18.5 8.4 12 2 12 2z"/></svg>',
     medal: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="15" r="6"/><path d="M8.5 3l3.5 6 3.5-6M12 12.2l.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2L9.1 14.3l2-.3z" stroke-linejoin="round"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke-linecap="round"/></svg>',
     moon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" stroke-linejoin="round"/></svg>',
     check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     chevL: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -126,6 +127,10 @@
       '.hm-today .hm-sub{font-size:12.5px;color:var(--text-dim);margin-bottom:10px;}',
       '.hm-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}',
       '.hm-chip{font-family:var(--font-mono);font-size:10.5px;color:var(--text-dim);border:1px solid var(--border);border-radius:999px;padding:3px 9px;background:rgba(255,255,255,.02);}',
+      '.hm-prog{height:8px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden;margin:2px 0 4px;}',
+      '.hm-prog i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent-dim),var(--accent));transition:width .5s cubic-bezier(.2,.8,.2,1);}',
+      '.hm-missed{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-2px 0 12px;padding:8px 10px;border:1px dashed var(--border);border-radius:10px;font-size:12px;color:var(--text-dim);}',
+      '.hm-missed button{background:none;border:0;color:var(--accent);font-weight:700;font-size:12px;padding:4px 2px;white-space:nowrap;}',
       '.hm-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;border-radius:var(--radius);padding:13px;font-weight:700;font-size:15px;background:var(--accent);color:#1A1200;position:relative;overflow:hidden;transition:transform .12s ease,filter .12s;}',
       '.hm-btn:active{transform:scale(.97);filter:brightness(.95);}',
       '.hm-btn svg{width:16px;height:16px;fill:currentColor;stroke:none;}',
@@ -258,6 +263,32 @@
       '@keyframes hmBob{50%{transform:translateY(4px)}}',
       '.hm-btn.ok{background:var(--good);color:#06150a;}',
       '.hm-btn[disabled]{opacity:.5;}',
+      '.hm-wk{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);margin:0 0 12px;padding:9px 11px;border-radius:10px;background:rgba(255,255,255,.04);}',
+      '.hm-wk svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;flex:none;}',
+      '.hm-wk .cd,.hm-seg .cd{font-family:var(--font-mono);color:var(--accent);font-variant-numeric:tabular-nums;}',
+      '.hm-wk .cd{margin-left:auto;font-weight:700;}',
+      '.hm-wk.new{color:var(--text);background:rgba(232,179,44,.1);border:1px solid var(--accent-dim);animation:hmPulse 2.2s ease-in-out infinite;}',
+      '.hm-wk .pill{background:var(--accent);color:#1a1405;font-weight:800;font-size:10px;letter-spacing:.08em;padding:2px 7px;border-radius:99px;}',
+      '@keyframes hmPulse{50%{box-shadow:0 0 0 4px rgba(232,179,44,.12)}}',
+      '.hm-seg .lk{display:flex;align-items:center;gap:4px;}',
+      '.hm-seg .lk svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.2;flex:none;}',
+      '.hm-seg.lock b{color:var(--text-dim);}',
+      '.hm-btn .cd{font-family:var(--font-mono);font-variant-numeric:tabular-nums;}',
+      '.hm-sheet-t{font-size:20px;margin:2px 0 2px;}',
+      '.hm-sheet-s{font-size:12px;color:var(--text-dim);margin:0 0 14px;}',
+      '.hm-opt{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;}',
+      '.hm-opt-h{display:flex;align-items:center;gap:12px;margin-bottom:8px;}',
+      '.hm-opt-h b{display:block;font-size:16px;}',
+      '.hm-opt-h small{font-size:11.5px;color:var(--text-dim);}',
+      '.hm-opt-i{width:38px;height:38px;border-radius:12px;background:rgba(232,179,44,.14);color:var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-weight:700;font-size:17px;flex:none;}',
+      '.hm-opt p{font-size:12.5px;color:var(--text-dim);line-height:1.5;margin:0 0 12px;}',
+      '.hm-segs{display:flex;gap:8px;margin-bottom:10px;}',
+      '.hm-seg{flex:1;min-width:0;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:9px 10px;color:var(--text);transition:border-color .15s,transform .12s;}',
+      '.hm-seg b{display:block;font-size:13.5px;}',
+      '.hm-seg small{display:block;font-size:10.5px;color:var(--text-dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+      '.hm-seg.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;}',
+      '.hm-seg:active{transform:scale(.97);}',
+      '.hm-seg[disabled]{opacity:.4;}',
       '.hm-fine{font-size:10.5px;color:var(--text-faint);margin-top:9px;text-align:center;}',
       /* confetti */
       '.hm-conf{position:fixed;width:8px;height:12px;z-index:90;pointer-events:none;border-radius:2px;animation:hmConf 1.1s cubic-bezier(.2,.7,.4,1) forwards;}',
@@ -293,6 +324,7 @@
     main.innerHTML = html;
     bind(split, sessions, today, rep);
     animate();
+    startTicker(); checkWeeklyReady();
     slide = '';
   }
 
@@ -303,6 +335,20 @@
     var quips = ['Plates won’t lift themselves.', 'Small reps, big compounding.', 'Show up. The numbers follow.', 'Today’s sets are tomorrow’s PRs.', 'Chalk up. Focus in.', 'Consistency beats intensity.', 'One more good session in the bank.'];
     var q = quips[(Math.floor(Date.now() / 864e5)) % quips.length];
     if (p.done) {
+      // A session in progress is not "done": only call it done when every exercise of the day has sets, or the user said so.
+      var dayExs = exercisesOfDay(p.day.id), loggedIds = {};
+      p.done.sets.forEach(function (x) { if (!isWarmupSet(x) && isCountedLoggedSet(x) && x.exerciseId) loggedIds[x.exerciseId] = 1; });
+      var left = dayExs.filter(function (e) { return !loggedIds[e.id]; }), nDone = dayExs.length - left.length;
+      if (left.length && DB_META.finishedDate !== today) {
+        var stp = sessionStats(p.done), pct = Math.round(nDone / dayExs.length * 100);
+        var rest = left.slice(0, 4).map(function (e) { return '<span class="hm-chip">' + esc(e.name) + '</span>'; }).join('') + (left.length > 4 ? '<span class="hm-chip">+' + (left.length - 4) + ' more</span>' : '');
+        return '<div class="hm-card hm-today hm-in"><div class="hm-hello">' + wd + ' · in progress</div><h2>' + esc(p.day.name) + '</h2>' +
+          '<div class="hm-sub">' + nDone + ' of ' + dayExs.length + ' exercises logged · ' + stp.hard + ' hard sets · ' + nfmt(stp.volume) + ' kg so far.</div>' +
+          '<div class="hm-prog" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100"><i style="width:' + pct + '%"></i></div>' +
+          '<div class="hm-hello" style="margin:10px 0 6px">Still to do</div><div class="hm-chips">' + rest + '</div>' +
+          '<button class="hm-btn shine" id="hm-start" data-day="' + p.day.id + '">' + I.play + ' Continue ' + esc(p.day.name) + '</button>' +
+          '<button class="hm-btn ghost" id="hm-finish" style="margin-top:8px">Finish for today</button></div>';
+      }
       var st = sessionStats(p.done), prs = 0; try { prs = (recordsByDate(homeCtx()).map[today]) || 0; } catch (e) { }
       return '<div class="hm-card hm-today hm-in"><div class="hm-done"><div class="hm-tick">' + I.check + '</div><div><div class="hm-hello">' + wd + '</div><h2>Done for today</h2></div></div>' +
         '<div class="hm-sub" style="margin-top:8px">' + esc(p.done.dayName) + ' is in the books. Nice work.</div>' +
@@ -311,15 +357,21 @@
     }
     if (isRestDay(p.day)) {
       return '<div class="hm-card hm-today hm-in"><div class="hm-rest"><div>' + I.moon + '</div><div><div class="hm-hello">' + wd + '</div><h2>Rest day</h2></div></div>' +
-        '<div class="hm-sub" style="margin-top:8px">Recovery is where the gains actually happen. Sleep well, eat enough, walk a little.</div>' +
+        '<div class="hm-sub" style="margin-top:8px">Recovery is where the gains actually happen. Sleep well, eat enough, walk a little.</div>' + missedNote(p) +
         '<button class="hm-btn ghost" id="hm-log-anyway">Train anyway</button></div>';
     }
     var exs = exercisesOfDay(p.day.id), hist = historySessionsForDay(p.day.id), last = hist[hist.length - 1];
     var names = exs.slice(0, 4).map(function (e) { return '<span class="hm-chip">' + esc(e.name) + '</span>'; }).join('') + (exs.length > 4 ? '<span class="hm-chip">+' + (exs.length - 4) + ' more</span>' : '');
     return '<div class="hm-card hm-today hm-in"><div class="hm-hello">' + wd + ' · up next</div><h2>' + esc(p.day.name) + '</h2>' +
       '<div class="hm-sub">' + esc(q) + (last ? ' Last time: ' + ago(last.date, today) + '.' : ' First time on this day.') + '</div>' +
-      '<div class="hm-chips">' + (names || '<span class="hm-chip">No exercises yet</span>') + '</div>' +
+      '<div class="hm-chips">' + (names || '<span class="hm-chip">No exercises yet</span>') + '</div>' + missedNote(p) +
       '<button class="hm-btn shine" id="hm-start" data-day="' + p.day.id + '">' + I.play + ' Start ' + esc(p.day.name) + '</button></div>';
+  }
+
+  function missedNote(p) {
+    var m = p.missed && p.missed[0]; if (!m || m.daysAgo > 3) return '';
+    var when = m.daysAgo === 1 ? 'yesterday' : m.daysAgo + ' days ago';
+    return '<div class="hm-missed"><span>Missed ' + esc(m.day.name) + ' ' + when + '</span><button id="hm-do-missed" data-day="' + m.day.id + '">Do it today instead</button></div>';
   }
 
   function weekCard(split, sessions, today, rep) {
@@ -424,7 +476,7 @@
 
   function notesCard(rep) {
     if (!rep) return '';
-    if (rep.insufficient) return '<div class="hm-card hm-in"><div class="hm-eyebrow"><span>Coach notes</span></div><div class="hm-empty">Log 3+ sessions and short, specific notes appear here: what to push, what to ease off, what is working.</div></div>';
+    if (rep.insufficient || rep.limited) return '<div class="hm-card hm-in"><div class="hm-eyebrow"><span>Coach notes</span></div><div class="hm-empty">Log 3+ sessions and short, specific notes appear here: what to push, what to ease off, what is working.</div></div>';
     var f = rep.findings.filter(function (x) { return x.severity !== 'good'; }).slice(0, 3), g = rep.findings.filter(function (x) { return x.severity === 'good'; })[0];
     var list = f.concat(g ? [g] : []);
     if (!list.length) return '';
@@ -450,12 +502,16 @@
   }
 
   function reportCard(rep) {
-    var ready = rep && !rep.insufficient, n = rep && rep.snapshot ? rep.snapshot.sessions : 0;
-    var tags = ready ? '<span class="hm-chip">' + rep.priorities.length + ' priorities</span><span class="hm-chip">' + rep.doList.length + ' things to do</span><span class="hm-chip">' + rep.dontList.length + ' to avoid</span><span class="hm-chip">advice for every graph</span>' : '';
+    var ready = workingCount() >= MIN_SETS, wk = weekInfo(todayStr()), line = '';
+    if (ready) {
+      if (wk.last.ready && DB_META.weeklySeen !== wk.last.key) line = '<div class="hm-wk new"><span class="pill">NEW</span><span>Weekly report for ' + wk.last.label + ' is ready</span></div>';
+      else line = '<div class="hm-wk">' + I.lock + '<span>Next weekly report opens in</span>' + cd(wk.this.unlock) + '</div>';
+    }
+    var tags = ready ? '<span class="hm-chip">Overall</span><span class="hm-chip">Weekly</span><span class="hm-chip">science-based advice</span><span class="hm-chip">next-week targets</span>' : '';
     return '<div class="hm-card hm-report hm-in"><div class="hm-eyebrow"><span>Coaching report</span><small>PDF · works offline</small></div><h3>Your report, written from your own sets</h3>' +
-      '<p>' + (ready ? 'Built from ' + plural(n, 'session') + '. It reads your calendar, muscle balance, effort, lifts and weekly volume, then tells you what to do and what to avoid.' : 'Log at least 3 sessions and the report unlocks. It reads every graph in the app and tells you what to do next.') + '</p>' +
-      '<div class="hm-rtags">' + tags + '</div>' +
-      '<button class="hm-btn ' + (ready ? 'shine' : '') + '" id="hm-report" ' + (ready ? '' : 'disabled') + '>' + I.dl + '<span>' + (ready ? 'Download my report' : 'Log 3 sessions to unlock') + '</span></button>' +
+      '<p>' + (ready ? 'Pick an overall report on your whole training, or a weekly report that opens when the week ends and compares it with the week before. Advice follows hypertrophy research.' : 'Log a couple of sets and the report unlocks. It reads every graph in the app and tells you what to do next.') + '</p>' +
+      '<div class="hm-rtags">' + tags + '</div>' + line +
+      '<button class="hm-btn ' + (ready ? 'shine' : '') + '" id="hm-report" ' + (ready ? '' : 'disabled') + '>' + I.dl + '<span>' + (ready ? 'Get my report' : 'Log a couple of sets to unlock') + '</span></button>' +
       '<div class="hm-fine">Based on your logged training only. Not medical advice.</div></div>';
   }
 
@@ -463,6 +519,8 @@
   function bind(split, sessions, today, rep) {
     var $ = function (id) { return document.getElementById(id); };
     var start = $('hm-start'); if (start) start.onclick = function () { state.logDayId = start.dataset.day; state.logDate = todayStr(); goToTab('log'); };
+    var dm = $('hm-do-missed'); if (dm) dm.onclick = function () { state.logDayId = dm.dataset.day; state.logDate = todayStr(); goToTab('log'); };
+    var fin = $('hm-finish'); if (fin) fin.onclick = function () { DB_META.finishedDate = todayStr(); Promise.resolve(saveMeta()).then(function () { reportCache = { key: null, rep: null }; render(); toast('Nice work. Session closed for today.', 1800); }); };
     var more = $('hm-add-more'); if (more) more.onclick = function () { state.logDate = todayStr(); goToTab('log'); };
     var anyway = $('hm-log-anyway'); if (anyway) anyway.onclick = function () { state.logDate = todayStr(); goToTab('log'); };
 
@@ -519,7 +577,7 @@
         goToTab('progress');
       };
     });
-    var rb = $('hm-report'); if (rb && !rb.disabled) rb.onclick = function () { downloadReport(rb); };
+    var rb = $('hm-report'); if (rb && !rb.disabled) rb.onclick = function () { openReportSheet(); };
   }
 
   function sessionOn(date, sessions) { return sessions.filter(function (s) { return s.date === date; })[0] || null; }
@@ -540,23 +598,109 @@
     toast(date === todayStr() ? 'Opening today’s log' : 'Logging for ' + fmtDate(date), 1600);
   }
 
-  function downloadReport(btn) {
+  /* ---------- weekly report: lock, countdown, ready notice ---------- */
+  var MIN_SETS = 2;               // working sets needed before any report unlocks
+  var cdTimer = null, unlockTimer = null;
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function workingCount(a, b) {
+    return DB.sets.filter(function (x) { if (isWarmupSet(x) || !isCountedLoggedSet(x)) return false; if (a == null) return true; var n = dnum(x.date); return n >= a && n <= b; }).length;
+  }
+  function unlockMs(W0) { var q = dstr(W0 + 7).split('-'); return new Date(+q[0], +q[1] - 1, +q[2], 0, 0, 0).getTime(); }   // local midnight after Sunday
+  function fmtCd(ms) {
+    if (ms < 0) ms = 0; var t = Math.floor(ms / 1000), d = Math.floor(t / 86400), h = Math.floor(t % 86400 / 3600), m = Math.floor(t % 3600 / 60), sec = t % 60;
+    return d > 0 ? d + 'd ' + pad2(h) + 'h ' + pad2(m) + 'm' : pad2(h) + ':' + pad2(m) + ':' + pad2(sec);
+  }
+  function weekInfo(today) {
+    var W0 = weekStart(dnum(today)), out = {}, now = Date.now();
+    [['this', W0], ['last', W0 - 7]].forEach(function (p) {
+      var a = p[1], b = a + 6, fa = fmtDate(dstr(a)), fb = fmtDate(dstr(b)), unlock = unlockMs(a), n = workingCount(a, b);
+      out[p[0]] = { start: a, end: b, key: dstr(a), sets: n, unlock: unlock, locked: now < unlock, ready: now >= unlock && n >= MIN_SETS,
+        label: fa + ' – ' + (fa.split(' ')[0] === fb.split(' ')[0] ? fb.split(' ').slice(1).join(' ') : fb) };
+    });
+    return out;
+  }
+  function tick() {
+    var els = document.querySelectorAll('[data-cd]');
+    if (!els.length) { clearInterval(cdTimer); cdTimer = null; return; }
+    var now = Date.now(); els.forEach(function (el) { el.textContent = fmtCd(Number(el.dataset.cd) - now); });
+  }
+  function startTicker() { clearInterval(cdTimer); cdTimer = null; if (document.querySelector('[data-cd]')) { tick(); cdTimer = setInterval(tick, 1000); } }
+  function cd(ms) { return '<span class="cd" data-cd="' + ms + '">' + fmtCd(ms - Date.now()) + '</span>'; }
+
+  // Called after every Home render and when the unlock moment passes: toast (and an OS notification if the
+  // user already allowed them) once per finished week that has enough sets.
+  function checkWeeklyReady() {
+    try {
+      var wk = weekInfo(todayStr()), last = wk.last;
+      if (last.ready && DB_META.weeklyNotified !== last.key) {
+        DB_META.weeklyNotified = last.key; Promise.resolve(saveMeta());
+        var msg = 'Your weekly report for ' + last.label + ' is ready';
+        setTimeout(function () { toast(msg + ' · open Home → Get my report', 4200); }, 700);
+        if (window.Notification && Notification.permission === 'granted') { try { new Notification('Plate & Progress', { body: msg }); } catch (e) { } }
+      }
+      clearTimeout(unlockTimer);
+      var next = wk.this.unlock - Date.now();
+      if (next > 0 && next < 2147483000) unlockTimer = setTimeout(function () { reportCache = { key: null, rep: null }; if (state.tab === 'home') render(); else checkWeeklyReady(); }, next + 400);
+    } catch (e) { }
+  }
+
+  function openReportSheet() {
+    var today = todayStr(), wk = weekInfo(today), total = workingCount();
+    var overallOk = total >= MIN_SETS;
+    var pick = wk.last.ready ? 'last' : 'this';
+    if (wk.last.ready && DB_META.weeklySeen !== wk.last.key) { DB_META.weeklySeen = wk.last.key; Promise.resolve(saveMeta()); }
+    var root = document.getElementById('modal-root');
+    function close() { clearInterval(cdTimer); cdTimer = null; root.innerHTML = ''; if (state.tab === 'home') { reportCache = { key: null, rep: null }; render(); } }
+    function paint() {
+      var chip = function (k, name) {
+        var w = wk[k], dis = !w.locked && w.sets < MIN_SETS;
+        var sub = w.locked ? '<small class="lk">' + I.lock + 'Opens in ' + cd(w.unlock) + '</small>' : '<small>' + (dis ? 'needs ' + MIN_SETS + ' sets' : plural(w.sets, 'set') + ' logged') + '</small>';
+        return '<button class="hm-seg' + (pick === k ? ' on' : '') + (w.locked ? ' lock' : '') + '" data-wk="' + k + '" ' + (dis ? 'disabled' : '') + '><b>' + name + '</b><small>' + w.label + '</small>' + sub + '</button>';
+      };
+      var sel = wk[pick], wBtn = sel.locked ? '<button class="hm-btn ghost" id="hm-go-weekly" disabled>' + I.lock + '<span>Unlocks in ' + cd(sel.unlock) + '</span></button>'
+        : '<button class="hm-btn" id="hm-go-weekly" ' + (sel.sets >= MIN_SETS ? '' : 'disabled') + '>' + I.dl + '<span>Download weekly report</span></button>';
+      root.innerHTML = '<div class="modal-overlay" id="m-overlay"><div class="modal-sheet hm-sheet" role="dialog" aria-label="Choose a report">' +
+        '<div class="modal-close-row"><button class="icon-btn" id="m-close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button></div>' +
+        '<h2 class="hm-sheet-t">Which report?</h2><p class="hm-sheet-s">Both are PDFs built on your device from your logged sets.</p>' +
+        '<div class="hm-opt"><div class="hm-opt-h"><span class="hm-opt-i">∑</span><div><b>Overall report</b><small>Your whole training so far</small></div></div>' +
+        '<p>Consistency, muscle balance, effort, every main lift, a reading of every graph, and your top 3 priorities with do and don’t lists.</p>' +
+        '<button class="hm-btn ' + (overallOk ? '' : 'ghost') + '" id="hm-go-overall" ' + (overallOk ? '' : 'disabled') + '>' + I.dl + '<span>' + (overallOk ? 'Download overall report' : 'Log a couple of sets to unlock') + '</span></button></div>' +
+        '<div class="hm-opt"><div class="hm-opt-h"><span class="hm-opt-i">7</span><div><b>Weekly report</b><small>A finished week vs the one before it</small></div></div>' +
+        '<p>Split day by day and muscle by muscle, lift progress, effort, plus targets for next week. A week’s report opens when that week ends (Sunday night).</p>' +
+        '<div class="hm-segs">' + chip('this', 'This week') + chip('last', 'Last week') + '</div>' + wBtn + '</div>' +
+        '</div></div>';
+      document.getElementById('m-close').onclick = close;
+      document.getElementById('m-overlay').onclick = function (e) { if (e.target.id === 'm-overlay') close(); };
+      document.querySelectorAll('.hm-seg').forEach(function (b) { b.onclick = function () { if (b.disabled) return; pick = b.dataset.wk; paint(); }; });
+      var o = document.getElementById('hm-go-overall'); if (o && !o.disabled) o.onclick = function () { downloadReport('overall', null, o, close); };
+      var w = document.getElementById('hm-go-weekly'); if (w && !w.disabled) w.onclick = function () { downloadReport('weekly', pick, w, close); };
+      startTicker();
+    }
+    paint();
+  }
+
+  function downloadReport(kind, which, btn, done) {
+    if (kind === 'weekly') { var wi = weekInfo(todayStr())[which]; if (!wi || wi.locked || wi.sets < MIN_SETS) { toast('That weekly report isn’t open yet', 2200); return; } }
     var label = btn.querySelector('span'), old = label.textContent;
     btn.classList.add('busy'); label.textContent = 'Building your report…';
     setTimeout(function () {                      // let the button repaint before the (synchronous) build
       try {
-        var forecasts = null;
-        Promise.resolve(typeof idbGet === 'function' ? idbGet('strengthIntelligence') : null).catch(function () { return null; }).then(function (si) {
-          var ctx = homeCtx(); ctx.forecastLog = si && si.forecasts ? si.forecasts : [];
-          var rep = ReportEngine.build(ctx);
-          var bytes = ReportPDF.render(rep);
+        Promise.resolve(kind === 'overall' && typeof idbGet === 'function' ? idbGet('strengthIntelligence') : null).catch(function () { return null; }).then(function (si) {
+          var ctx = homeCtx(), bytes, name;
+          if (kind === 'weekly') {
+            var rep = ReportWeekly.build(ctx, { which: which });
+            bytes = ReportPDF.renderWeekly(rep); name = 'plate-progress-weekly-report-' + rep.weekStart + '.pdf';
+          } else {
+            ctx.forecastLog = si && si.forecasts ? si.forecasts : [];
+            bytes = ReportPDF.render(ReportEngine.build(ctx)); name = 'plate-progress-report-' + todayStr() + '.pdf';
+          }
           var blob = new Blob([bytes], { type: 'application/pdf' });
           var url = URL.createObjectURL(blob), a = document.createElement('a');
-          a.href = url; a.download = 'plate-progress-report-' + todayStr() + '.pdf'; document.body.appendChild(a); a.click(); a.remove();
+          a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
           setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
           btn.classList.remove('busy'); btn.classList.add('ok'); label.textContent = 'Report downloaded';
-          toast('Report saved as PDF', 2200); confetti(btn);
-          setTimeout(function () { btn.classList.remove('ok'); label.textContent = old; }, 2600);
+          toast((kind === 'weekly' ? 'Weekly' : 'Overall') + ' report saved as PDF', 2200); confetti(btn);
+          setTimeout(function () { if (done) done(); }, 1100);
         }).catch(fail);
       } catch (e) { fail(e); }
       function fail(e) { console.error('Report failed', e); btn.classList.remove('busy'); label.textContent = old; toast('Couldn’t build the report', 2600); }

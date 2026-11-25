@@ -663,9 +663,10 @@
 <script src="chart-max.js?v=47"></script>
 <script src="strength-intelligence.js?v=2"></script>
 <script src="strength-ui.js?v=4"></script>
-<script src="report-engine.js?v=1"></script>
-<script src="report-pdf.js?v=1"></script>
-<script src="home.js?v=1"></script>
+<script src="report-engine.js?v=3"></script>
+<script src="report-weekly.js?v=1"></script>
+<script src="report-pdf.js?v=3"></script>
+<script src="home.js?v=4"></script>
 <script>
 /* ============ STATE ============ */
 let DB = { splits: [], exercises: [], sets: [], exerciseClassificationOverrides: {}, exerciseDatabase: null };
@@ -1468,6 +1469,24 @@ function historySessionsForDay(dayId){
 // logged history, never forces the date away from today, and any manual day
 // selection the user makes afterward is respected for the rest of the day
 // (this function won't run again until the next new calendar date).
+/* Which split day is "today"? The split follows the calendar: the day after the last
+   logged one is due tomorrow, the one after that the day after, and so on. A day you skip
+   is therefore MISSED, not postponed, and today lands on the day after it. After a long
+   break (more than one full cycle) the position no longer means anything, so it falls back
+   to "the day after the last logged one". `sessions` must be ascending and already limited
+   to this split. Returns { idx, missed:[{dayId, daysAgo}], elapsed, calendar }. */
+function scheduledDay(split, sessions, today){
+  const ids = split.days.map(d=>d.id), n = ids.length;
+  if(!sessions.length) return { idx:0, missed:[], elapsed:null, calendar:false };
+  const last = sessions[sessions.length-1], li = ids.indexOf(last.dayId);
+  if(li < 0) return { idx:0, missed:[], elapsed:null, calendar:false };
+  const elapsed = Math.round((Date.parse(today+'T00:00:00Z') - Date.parse(last.date+'T00:00:00Z'))/864e5);
+  if(elapsed <= 0) return { idx:li, missed:[], elapsed:0, calendar:true };
+  if(elapsed > n) return { idx:(li+1)%n, missed:[], elapsed, calendar:false };
+  const missed = [];
+  for(let k=1;k<elapsed;k++){ const di=(li+k)%n; if(!isRestDay(split.days[di])) missed.push({ dayId:ids[di], daysAgo:elapsed-k }); }
+  return { idx:(li+elapsed)%n, missed, elapsed, calendar:true };
+}
 async function applySmartLogDefault(){
   const today = todayStr();
   if(DB_META.lastAutoAssignDate === today) return; // already applied today
@@ -1489,12 +1508,9 @@ async function applySmartLogDefault(){
     state.logDayId = mostRecent.dayId;
     return;
   }
-  // Nothing logged today yet: default to the day that follows the most recently
-  // logged day in the split's ordered day list (wrapping around).
-  const idx = orderedDayIds.indexOf(mostRecent.dayId);
-  if(idx === -1) return;
-  const nextDayId = orderedDayIds[(idx+1) % orderedDayIds.length];
-  state.logDayId = nextDayId;
+  // Nothing logged today yet: follow the calendar (see scheduledDay).
+  const sd = scheduledDay(split, sessions, today);
+  state.logDayId = orderedDayIds[sd.idx];
 }
 
 /* ============ RENDER ROOT ============ */

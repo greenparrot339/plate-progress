@@ -81,7 +81,7 @@
     for (var i = 0; i < lines.length; i++) { this.need(lead); this.y -= lead; this.text(x, this.y + lead * 0.22, lines[i], size, o.color, o.bold); }
     if (o.after) this.y -= o.after;
   };
-  Doc.prototype.h1 = function (t) { this.need(40); this.gap(10); this.y -= 18; this.text(MX, this.y, t, 16, C.ink, true); this.gap(5); this.line(MX, this.y, PW - MX, this.y, C.amber, 1.6); this.gap(6); };
+  Doc.prototype.h1 = function (t) { this.need(80); this.gap(10); this.y -= 18; this.text(MX, this.y, t, 16, C.ink, true); this.gap(5); this.line(MX, this.y, PW - MX, this.y, C.amber, 1.6); this.gap(6); };
   Doc.prototype.h2 = function (t, color) { this.need(30); this.gap(6); this.y -= 13; this.text(MX, this.y, t, 11.5, color || C.ink, true); this.gap(3); };
   Doc.prototype.bullet = function (t, o) {
     o = o || {}; var size = o.size || 10, lead = size * 1.38, ind = o.indent || 14, maxW = PW - 2 * MX - ind;
@@ -187,6 +187,14 @@
   /* ============================================================
      THE REPORT
      ============================================================ */
+  var SCIENCE = [
+    { topic: 'Weekly sets per muscle', rule: 'About 10-20 hard sets per muscle per week; below ~10 grows less, beyond ~20 returns shrink.', level: 'Strong evidence', ref: 'Schoenfeld, Ogborn & Krieger 2017, J Sports Sci (dose-response of weekly volume)' },
+    { topic: 'Training close to failure', rule: 'Most sets within 0-3 reps of failure; sets with 4+ reps left add little growth stimulus.', level: 'Strong evidence', ref: 'Refalo et al. 2023, Sports Med (proximity to failure meta-analysis)' },
+    { topic: 'Frequency', rule: 'Hitting a muscle about twice a week is a convenient way to spread weekly sets; once volume is equal, frequency itself matters little.', level: 'Moderate evidence', ref: 'Schoenfeld, Grgic & Krieger 2016, Sports Med (frequency meta-analysis)' },
+    { topic: 'Rep range', rule: 'Roughly 5-30 reps all build muscle if sets are taken close to failure; 6-12 for compounds and 10-20 for isolation are efficient.', level: 'Strong evidence', ref: 'Schoenfeld et al. 2017, J Strength Cond Res (low vs high load)' },
+    { topic: 'Progressive overload', rule: 'Muscle grows when the load or reps you handle keep rising; use double progression (add reps up to the top of the range, then add weight).', level: 'Strong evidence', ref: 'Core principle of resistance training; ACSM position stand 2009' },
+    { topic: 'Volume ramps and lighter weeks', rule: 'Raise weekly volume gradually and plan a lighter week when performance drops.', level: 'Practical guideline', ref: 'Coaching consensus; evidence for exact numbers is limited' }
+  ];
   var SEV = { alert: 'Needs attention', warn: 'Worth fixing', info: 'Worth knowing', good: 'Going well' };
   function fmtLong(s) { var d = new Date(s + 'T00:00:00Z'); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }); }
   function fmtShort(s) { var d = new Date(s + 'T00:00:00Z'); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }); }
@@ -206,9 +214,10 @@
     if (rep.insufficient) {
       d.h1('Not enough data yet');
       d.para(rep.limits[0], { size: 10.5 });
-      d.para('Come back after a few more sessions. Everything in this report is built from the sets you log.', { size: 10, color: C.dim });
+      d.para('Come back after a few more sets. Everything in this report is built from the sets you log.', { size: 10, color: C.dim });
       return d.finish();
     }
+    if (rep.limited) { d.para('EARLY REPORT: built from very little data (under 3 sessions). Treat it as a first read; it gets much sharper after a few weeks of logging.', { size: 9.4, bold: true, color: C.amberDark, after: 6 }); }
 
     // snapshot tiles
     var S = rep.snapshot, tw = (PW - 2 * MX - 3 * 10) / 4, ty = d.y - 64, tx = MX;
@@ -224,7 +233,7 @@
 
     // priorities
     d.h1('Your 3 priorities');
-    if (rep.priorities.length) rep.priorities.forEach(function (p, i) { d.priority(i + 1, p); });
+    if (rep.priorities.length) rep.priorities.forEach(function (p, i) { d.priority(i + 1, p); if (p.why) { d.y += 4; d.para('Why: ' + p.why + '  [' + p.level + ']', { size: 8.6, color: C.dim, indent: 8, after: 6 }); } });
     else d.para('Nothing urgent. Keep doing what you are doing and keep logging.', { size: 10.5 });
 
     // going well
@@ -291,14 +300,171 @@
         d.need(40);
         var c = f.severity === 'good' ? C.good : (f.severity === 'info' ? C.dim : C.rust);
         d.para(SEV[f.severity].toUpperCase() + '   ' + f.title, { size: 9.6, bold: true, color: c, after: 0 });
-        d.para(f.evidence, { size: 9, color: C.dim, indent: 8, after: 3 });
+        d.para(f.evidence, { size: 9, color: C.dim, indent: 8, after: f.why ? 0 : 3 });
+        if (f.why) d.para('Why: ' + f.why + '  [' + f.level + ']', { size: 8.4, color: C.faint, indent: 8, after: 3 });
       });
     }
+
+    d.h1('The science behind these suggestions');
+    d.para('Advice in this report follows hypertrophy research and standard coaching practice; each note says how firm the evidence is.', { size: 9.2, color: C.dim, after: 3 });
+    SCIENCE.forEach(function (sc) { d.need(46); d.para(sc.topic + '   [' + sc.level + ']', { size: 9.4, bold: true, after: 0 }); d.para(sc.rule, { size: 9, indent: 8, after: 0 }); d.para(sc.ref, { size: 8.2, color: C.faint, indent: 8, after: 3 }); });
 
     d.h1('How to read this report');
     rep.limits.forEach(function (t) { d.bullet(t, { size: 9, color: C.faint }); });
     return d.finish();
   }
 
-  return { render: render, _wrap: wrap, _width: width, _clean: clean };
+
+  /* ============================================================
+     THE WEEKLY REPORT
+     ============================================================ */
+  var GRAY2 = [0.78, 0.80, 0.83], PALE = [0.90, 0.95, 0.91];
+  var LVLCOL = { 'Strong evidence': C.good, 'Moderate evidence': C.amberDark, 'Practical guideline': C.dim };
+  function pctTxt(v) { return v == null ? 'n/a' : (Math.abs(v) < 0.5 ? 'flat' : (v > 0 ? '+' : '') + Math.round(v) + '%'); }
+  function nn(v) { return String(Math.round(v * 100) / 100); }
+  function sessTxt(s) { if (!s) return 'n/a'; return nn(s.top) + ' kg x ' + s.reps.join(',') + (s.avgRir != null ? ' (RIR ' + (Math.round(s.avgRir * 10) / 10) + ')' : ''); }
+
+  Doc.prototype.cmpbars = function (title, rows, o) {
+    o = o || {}; var rh = 23, h = 26 + rows.length * rh + 10; this.need(h);
+    this.text(MX, this.y - 10, title, 9.5, C.ink, true);
+    var lx = PW - MX - 168; this.rect(lx, this.y - 11, 8, 8, C.amber); this.text(lx + 11, this.y - 9, 'this week', 7.6, C.dim);
+    this.rect(lx + 66, this.y - 11, 8, 8, GRAY2); this.text(lx + 77, this.y - 9, o.prevLabel || 'last week', 7.6, C.dim);
+    var x0 = MX + 62, cw = PW - 2 * MX - 62 - 36, top = this.y - 24, maxV = 1;
+    rows.forEach(function (r) { maxV = Math.max(maxV, r.now, r.prev || 0, r.hi || 0); }); maxV *= 1.12;
+    rows.forEach(function (r, i) {
+      var y = top - (i + 1) * rh + 3;
+      if (r.hi) this.rect(x0 + r.lo / maxV * cw, y - 1, (r.hi - r.lo) / maxV * cw, rh - 3, PALE);
+      this.text(MX, y + 8, r.label, 8.6, C.ink, true);
+      this.rect(x0, y + 9, Math.max(r.now / maxV * cw, r.now > 0 ? 1.5 : 0), 7, r.color || C.amber);
+      this.text(x0 + r.now / maxV * cw + 4, y + 9.5, String(r.now), 7.8, C.ink, true);
+      if (r.prev != null) { this.rect(x0, y + 1, Math.max(r.prev / maxV * cw, r.prev > 0 ? 1.5 : 0), 6, GRAY2); this.text(x0 + r.prev / maxV * cw + 4, y + 1.5, String(r.prev), 7.2, C.dim); }
+    }, this);
+    this.y = top - rows.length * rh - 4;
+    if (o.note) { this.text(MX, this.y - 8, o.note, 7.6, C.dim); this.y -= 12; }
+  };
+  Doc.prototype.pill = function (x, y, w, label, note, ok) {
+    var c = ok === true ? C.good : ok === false ? C.rust : C.faint;
+    this.rect(x, y, w, 36, C.card); this.strokeRect(x, y, w, 36, C.line, 0.6); this.rect(x, y, 4, 36, c);
+    this.text(x + 12, y + 22, label, 9.4, C.ink, true); this.text(x + 12, y + 9, note, 7.8, C.dim);
+    this.text(x + w - 16, y + 20, ok === true ? 'OK' : ok === false ? '!' : '-', 10, c, true);
+  };
+
+  function renderWeekly(rep) {
+    var d = new Doc({ title: 'Plate & Progress weekly report', footer: 'Weekly report ' + fmtShort(rep.weekStart) + ' - ' + fmtShort(rep.weekEnd) });
+    d.rect(0, PH - 112, PW, 112, C.band); d.rect(0, PH - 114, PW, 2.4, C.amber);
+    d.text(MX, PH - 44, 'PLATE & PROGRESS', 9, C.amber, true);
+    d.text(MX, PH - 74, 'Your weekly report', 25, C.white, true);
+    var sub = fmtShort(rep.weekStart) + ' - ' + fmtLong(rep.weekEnd) + (rep.splitName ? '   |   ' + rep.splitName : '') + '   |   ' + (rep.partial ? 'week in progress (day ' + rep.dayOfWeek + ' of 7)' : 'complete week');
+    d.text(MX, PH - 96, sub, 9.2, [0.72, 0.74, 0.77]);
+    d.y = PH - 112 - 14;
+    if (rep.insufficient) {
+      d.h1('Nothing to report yet'); d.para(rep.limits[0], { size: 10.5 }); return d.finish();
+    }
+    var T = rep.totals, c = T.cur, p = T.prev, dl = T.d, tw = (PW - 2 * MX - 30) / 4, ty = d.y - 64;
+    var vs = rep.compare.has ? 'vs ' + rep.compare.label : 'no earlier week';
+    var tiles = [
+      ['Sessions', c.sessions + ' / ' + c.goal, p ? p.sessions + ' ' + rep.compare.label : vs],
+      ['Hard sets', String(c.hardSets), dl ? pctTxt(dl.hard) + ' ' + vs : vs],
+      ['Volume', c.volume >= 1000 ? (Math.round(c.volume / 100) / 10) + 'k kg' : c.volume + ' kg', dl ? pctTxt(dl.volume) + ' ' + vs : vs],
+      ['Average RIR', c.avgRir == null ? 'n/a' : String(Math.round(c.avgRir * 10) / 10), p && p.avgRir != null ? (Math.round(p.avgRir * 10) / 10) + ' ' + rep.compare.label : 'RIR not logged']
+    ];
+    tiles.forEach(function (t, i) { d.tile(MX + i * (tw + 10), ty, tw, 58, t[0], t[1], t[2].length > 30 ? t[2].slice(0, 30) : t[2]); });
+    d.y = ty - 8;
+    d.text(MX, d.y - 8, rep.headline.toUpperCase() + '  -  ' + rep.checksPassed + ' of ' + rep.checksKnown + ' checks passed', 9.2, C.amberDark, true); d.y -= 16;
+    var pw4 = (PW - 2 * MX - 30) / 4, py = d.y - 38;
+    rep.checks.forEach(function (k, i) { d.pill(MX + i * (pw4 + 10), py, pw4, k.label, k.note.length > 24 ? k.note.slice(0, 24) : k.note, k.ok); });
+    d.y = py - 6;
+
+    d.h1('Your 3 priorities for the next week');
+    if (rep.priorities.length) rep.priorities.forEach(function (pr, i) {
+      d.priority(i + 1, pr);
+      d.y += 4; d.para('Why: ' + pr.why + '  [' + pr.level + ']', { size: 8.6, color: C.dim, indent: 8, after: 6 });
+    }); else d.para('Nothing urgent. Repeat what you did this week and aim to beat your top sets.', { size: 10.5 });
+
+    if (rep.going.length) { d.h1('What went well'); rep.going.slice(0, 6).forEach(function (g) { d.bullet(g.title + '. ' + g.evidence, { color: C.good }); }); }
+
+    if (rep.days.length) {
+      d.h1('Your split: this week vs ' + (rep.compare.has ? 'last logged' : 'nothing yet'));
+      var cols = [MX, MX + 130, MX + 205, MX + 300, MX + 395];
+      d.need(30 + Math.min(rep.days.length, 3) * 15); d.y -= 14;
+      ['Day', 'Status', 'Hard sets', 'Volume (kg)', 'Avg RIR'].forEach(function (h, i) { d.text(cols[i], d.y, h.toUpperCase(), 7.2, C.dim, true); });
+      d.gap(4); d.line(MX, d.y, PW - MX, d.y, C.line, 0.6);
+      rep.days.forEach(function (r) {
+        d.need(18); d.y -= 14;
+        var sc = r.status === 'done' ? C.good : r.status === 'missed' ? C.rust : C.dim;
+        d.text(cols[0], d.y, r.name, 9.4, C.ink, true);
+        d.text(cols[1], d.y, r.status === 'done' ? 'Done' + (r.date ? ' ' + fmtShort(r.date) : '') : r.status === 'missed' ? 'Missed' : 'Still to do', 9, sc, true);
+        d.text(cols[2], d.y, r.status === 'done' ? r.hardSets + (r.prevHardSets != null ? '  (was ' + r.prevHardSets + ')' : '') : '-', 9, C.ink);
+        d.text(cols[3], d.y, r.status === 'done' ? r.volume.toLocaleString('en-US') + (r.prevVolume != null ? '  (' + r.prevVolume.toLocaleString('en-US') + ')' : '') : '-', 9, C.ink);
+        d.text(cols[4], d.y, r.avgRir != null ? String(Math.round(r.avgRir * 10) / 10) + (r.prevAvgRir != null ? '  (' + Math.round(r.prevAvgRir * 10) / 10 + ')' : '') : '-', 9, C.ink);
+      });
+      d.gap(4);
+    }
+
+    d.h1('Muscles: hard sets against the growth range');
+    var G = ['chest', 'back', 'shoulders', 'arms', 'legs'], rowsM = [];
+    G.forEach(function (g) { var m = rep.muscles[g]; if (!m.sets && !m.prev && !m.planned) return; rowsM.push({ label: { chest: 'Chest', back: 'Back', shoulders: 'Shoulders', arms: 'Arms', legs: 'Legs' }[g], now: m.sets, prev: m.prev, lo: m.target[0], hi: m.target[1], color: m.status === 'ok' ? C.good : m.status === 'high' ? C.rust : C.amber }); });
+    if (rowsM.length) d.cmpbars('Hard sets per muscle group', rowsM, { prevLabel: rep.compare.has ? 'last week' : '', note: 'green band = target range (10-20 for chest, back, legs; 8-20 for shoulders, arms)' + (rep.partial ? '. Week still in progress.' : '') });
+    if (rep.fine && rep.fine.length) d.para('Finer view (hard sets this week): ' + rep.fine.map(function (m) { return m.muscle + ' ' + m.sets + (m.prev ? ' (was ' + m.prev + ')' : ''); }).join(', ') + '.', { size: 8.8, color: C.dim, after: 4 });
+    var b = rep.balance; if (b.push + b.pull >= 6) d.para('Push ' + b.push + ' : pull ' + b.pull + (b.quads + b.post >= 4 ? '   |   quads ' + b.quads + ' : hamstrings/glutes ' + b.post : ''), { size: 9, bold: true, after: 4 });
+
+    if (rep.lifts.length) {
+      d.h1('Your lifts: this week vs the previous session');
+      rep.lifts.forEach(function (l) {
+        var vc = l.verdict === 'up' ? C.good : l.verdict === 'down' ? C.rust : C.dim, vt = l.verdict === 'up' ? 'Progressed' : l.verdict === 'down' ? 'Dropped' : l.verdict === 'same' ? 'Held steady' : 'New lift';
+        var tl = wrap('Next: ' + l.target.text, 8.6, PW - 2 * MX - 20, true), h = 46 + tl.length * 11.6;
+        d.need(h + 6); var top = d.y;
+        d.rect(MX, top - h, PW - 2 * MX, h, C.card); d.strokeRect(MX, top - h, PW - 2 * MX, h, C.line, 0.6); d.rect(MX, top - h, 4, h, vc);
+        d.text(MX + 12, top - 15, l.name, 10.6, C.ink, true);
+        var st = vt + (l.change != null ? '  ' + pctTxt(l.change) + ' est. 1RM' + (l.effortAdjusted ? ' (reps + RIR)' : '') : '');
+        d.text(PW - MX - 10 - width(clean(st), 8.6, true), top - 15, st, 8.6, vc, true);
+        d.text(MX + 12, top - 28, (l.prev ? 'Before: ' + sessTxt(l.prev) + '    ->    ' : '') + 'Now: ' + sessTxt(l.now), 8.8, C.dim);
+        d.text(MX + 12, top - 40, l.now.sets + (l.now.sets === 1 ? ' set' : ' sets') + ' this session' + (l.prev ? ' (' + l.prev.sets + ' before)' : ''), 7.8, C.faint);
+        var cy = top - 52; tl.forEach(function (ln) { d.text(MX + 12, cy, ln, 8.6, C.amberDark, true); cy -= 11.6; });
+        d.y = top - h - 6;
+      });
+    }
+
+    d.h1('Effort and rep ranges');
+    var ef = rep.effort;
+    if (ef.rated >= 4) d.bars('Reps left in reserve (RIR), sets this week', ef.dist.map(function (v, i) { return { label: i === 5 ? '5+' : String(i), value: v, color: i <= 3 ? C.amber : C.bar }; }), { height: 54, note: 'RIR 0-3 = hard set' });
+    else d.para('Too few sets have RIR logged to chart effort (' + ef.rated + ' of ' + ef.total + ').', { size: 9.4, color: C.dim });
+    if (rep.reps.total >= 6) d.bars('Reps per hard set', rep.reps.buckets.map(function (v, i) { return { label: rep.reps.labels[i], value: v, color: (i >= 1 && i <= 3) ? C.amber : C.bar }; }), { height: 54, note: '5-20 reps is the efficient zone' });
+
+    if (rep.records.length) { d.h1('Records this week'); rep.records.slice(0, 8).forEach(function (r) { d.bullet(r.name + ': ' + r.label + ' (' + fmtShort(r.date) + ')', { color: C.amber }); }); }
+
+    d.h1('What to do'); if (rep.doList.length) rep.doList.forEach(function (t) { d.bullet(t, { color: C.good }); }); else d.para('No changes needed. Keep going.', { size: 10 });
+    d.h1('What not to do'); if (rep.dontList.length) rep.dontList.forEach(function (t) { d.bullet(t, { color: C.rust }); }); else d.para('Nothing specific to avoid.', { size: 10 });
+
+    d.h1('Your plan for next week');
+    if (rep.plan.muscles.length) {
+      d.h2('Weekly hard sets to aim for', C.amberDark);
+      rep.plan.muscles.forEach(function (m) { d.bullet(m.label + ': ' + m.now + ' -> ' + m.target + ' hard sets' + ({ 'build up': '  (build up gradually)', trim: '  (trim, you were above the range)', hold: '  (hold)', 'room to add': '  (room to add, lifts are going up)', 'keep to range': '  (stay in range)' }[m.note] || ''), { size: 9.6, color: C.amber }); });
+    }
+    if (rep.plan.lifts.length) {
+      d.h2('Lift targets (double progression)', C.amberDark);
+      rep.plan.lifts.forEach(function (l) { d.bullet(l.name + ': ' + l.text, { size: 9.4, color: C.amber }); });
+    }
+
+    d.h1('Everything this report found');
+    rep.findings.forEach(function (f) {
+      d.need(46); var col2 = f.severity === 'good' ? C.good : f.severity === 'info' ? C.dim : C.rust;
+      d.para(SEV[f.severity].toUpperCase() + '   ' + f.title, { size: 9.6, bold: true, color: col2, after: 0 });
+      d.para(f.evidence, { size: 9, color: C.dim, indent: 8, after: 0 });
+      if (f.why) d.para('Why: ' + f.why, { size: 8.6, color: C.dim, indent: 8, after: 0 });
+      if (f.level) d.para('Evidence: ' + f.level, { size: 8.4, bold: true, color: LVLCOL[f.level] || C.dim, indent: 8, after: 3 });
+    });
+
+    d.h1('The science behind these suggestions');
+    d.para('Every rule above comes from hypertrophy research or standard coaching practice. Each is labelled with how firm the evidence is.', { size: 9.2, color: C.dim, after: 3 });
+    rep.science.forEach(function (s) {
+      d.need(46);
+      d.para(s.topic + '   [' + s.level + ']', { size: 9.4, bold: true, color: LVLCOL[s.level] || C.ink, after: 0 });
+      d.para(s.rule, { size: 9, indent: 8, after: 0 }); d.para(s.ref, { size: 8.2, color: C.faint, indent: 8, after: 3 });
+    });
+    d.h1('How to read this report'); rep.limits.forEach(function (t) { d.bullet(t, { size: 9, color: C.faint }); });
+    return d.finish();
+  }
+
+  return { render: render, renderWeekly: renderWeekly, _wrap: wrap, _width: width, _clean: clean };
 }));
