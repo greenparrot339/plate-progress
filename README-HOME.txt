@@ -50,3 +50,6 @@ UPDATE 3 - ROTATION, LOCKED WEEKLY REPORT
 
 UPDATE 4 - TODAY CARD
 - A day with sets logged but exercises still untouched now shows "in progress" (x of y exercises, progress bar, remaining exercises, Continue / Finish for today). "Done for today" appears once every exercise has sets or you tap Finish (DB_META.finishedDate). Cache v56-progress.
+
+UPDATE 5 - REST DAY
+- Log tab rest day shows the sleeping-monkey photo (rest-monkey.jpg) in a night-sky frame: breathing, floating Zs, snore bubble, twinkling stars, rocking moon, rotating goofy captions, a fake "rebuild" bar, and tap-to-poke (bubble lines escalate). Respects reduced motion. Cache v57-monkey.

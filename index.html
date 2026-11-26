@@ -475,6 +475,44 @@
   @keyframes restZ{0%{opacity:0;transform:translate(-6px,8px);}30%{opacity:.95;}100%{opacity:0;transform:translate(8px,-10px);}}
   @keyframes restTwinkle{0%,100%{opacity:.95;}50%{opacity:.45;}}
   @media (prefers-reduced-motion:reduce){.rest-art .rest-stars,.rest-art .rest-z text{animation:none;opacity:.8;}}
+  /* ===== Rest day: sleeping monkey ===== */
+  .rest-stage{position:relative;width:100%;max-width:330px;aspect-ratio:1/1.02;margin:0 auto 14px;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;user-select:none;
+    background:radial-gradient(closest-side at 50% 64%, rgba(232,179,44,.10), rgba(60,74,118,.16) 55%, transparent 100%);}
+  .rest-stage .star{position:absolute;width:3px;height:3px;border-radius:50%;background:#f3ead0;opacity:.8;animation:restTwinkle 3.4s ease-in-out infinite;}
+  .rest-stage .star.big{width:4px;height:4px;box-shadow:0 0 6px rgba(255,236,170,.8);}
+  .rest-moon{position:absolute;top:7%;right:9%;width:46px;height:46px;border-radius:50%;box-shadow:inset -13px 7px 0 0 var(--accent);
+    filter:drop-shadow(0 0 10px rgba(232,179,44,.45));animation:restMoon 6s ease-in-out infinite;transform-origin:50% 0;}
+  .rest-frame{position:absolute;left:50%;bottom:9%;width:68%;aspect-ratio:1/1;transform:translateX(-50%);border-radius:30px;overflow:hidden;
+    border:2px solid var(--accent);box-shadow:0 12px 26px rgba(0,0,0,.45), 0 0 40px rgba(232,179,44,.14);
+    transform-origin:50% 100%;animation:restBreathe 4.2s ease-in-out infinite;}
+  .rest-frame img{display:block;width:100%;height:100%;object-fit:cover;filter:saturate(.82) contrast(1.06) brightness(.9);pointer-events:none;}
+  .rest-frame::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(180deg,rgba(26,32,51,.18) 0%,rgba(14,16,26,.52) 100%), radial-gradient(70% 60% at 22% 18%, rgba(255,240,200,.0), rgba(12,14,22,.35));mix-blend-mode:multiply;}
+  .rest-snore{position:absolute;left:46.5%;bottom:41%;width:15px;height:15px;border-radius:50%;border:2px solid rgba(255,255,255,.7);background:rgba(255,255,255,.16);
+    transform-origin:0 100%;animation:restSnore 4.2s ease-in-out infinite;}
+  .rest-stage .rz{position:absolute;left:55%;bottom:62%;font-family:var(--font-display);font-weight:700;color:var(--accent);opacity:0;text-shadow:0 0 10px rgba(232,179,44,.5);animation:restZf 3.8s ease-in infinite;pointer-events:none;}
+  .rest-stage .rz.z1{font-size:16px;animation-delay:0s;} .rest-stage .rz.z2{font-size:22px;animation-delay:.95s;}
+  .rest-stage .rz.z3{font-size:28px;animation-delay:1.9s;} .rest-stage .rz.z4{font-size:20px;animation-delay:2.85s;}
+  .rest-bubble{position:absolute;left:6%;top:9%;max-width:56%;padding:7px 11px;border-radius:14px 14px 14px 4px;background:rgba(255,255,255,.94);color:#1a1d26;
+    font-size:11.5px;font-weight:700;line-height:1.3;text-align:left;opacity:0;transform:translateY(6px) scale(.96);transition:opacity .25s,transform .25s;z-index:3;}
+  .rest-bubble.show{opacity:1;transform:none;}
+  .rest-stage.poked .rest-frame{animation:restPoke .6s ease both;}
+  .rest-stage.poked .rz{animation-duration:1.4s;}
+  .rest-lines{position:relative;height:18px;margin:0 auto 12px;max-width:300px;}
+  .rest-lines span{position:absolute;inset:0;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.02em;color:var(--accent);opacity:0;animation:restLine 16s linear infinite;}
+  .rest-lines span:nth-child(2){animation-delay:4s;} .rest-lines span:nth-child(3){animation-delay:8s;} .rest-lines span:nth-child(4){animation-delay:12s;}
+  .rest-meter{max-width:260px;height:6px;margin:0 auto 14px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden;}
+  .rest-meter i{display:block;height:100%;width:8%;border-radius:99px;background:linear-gradient(90deg,var(--accent-dim),var(--accent));animation:restMeter 16s ease-in-out infinite;}
+  .rest-hint{margin-top:10px !important;font-size:11px !important;color:var(--text-faint,var(--text-dim)) !important;opacity:.7;}
+  @keyframes restBreathe{0%,100%{transform:translateX(-50%) scale(1);}50%{transform:translateX(-50%) scale(1.028);}}
+  @keyframes restSnore{0%,12%{transform:scale(0);opacity:0;}45%{transform:scale(1.5);opacity:1;}62%{transform:scale(1.9);opacity:.9;}70%{transform:scale(2.4);opacity:0;}100%{transform:scale(0);opacity:0;}}
+  @keyframes restZf{0%{opacity:0;transform:translate(0,0) scale(.55) rotate(-8deg);}15%{opacity:1;}100%{opacity:0;transform:translate(54px,-96px) scale(1.35) rotate(14deg);}}
+  @keyframes restMoon{0%,100%{transform:rotate(-6deg);}50%{transform:rotate(6deg);}}
+  @keyframes restPoke{0%{transform:translateX(-50%) rotate(0) scale(1);}18%{transform:translateX(-50%) rotate(-5deg) scale(1.07);}38%{transform:translateX(-50%) rotate(4deg) scale(1.05);}60%{transform:translateX(-50%) rotate(-2deg) scale(1.03);}100%{transform:translateX(-50%) rotate(0) scale(1);}}
+  @keyframes restLine{0%{opacity:0;transform:translateY(5px);}4%,22%{opacity:1;transform:none;}26%,100%{opacity:0;transform:translateY(-5px);}}
+  @keyframes restMeter{0%{width:8%;}92%{width:97%;}100%{width:8%;}}
+  @media (prefers-reduced-motion:reduce){.rest-stage *{animation:none !important;} .rest-stage .rz{opacity:.7;} .rest-lines span:first-child{opacity:1;} .rest-meter i{width:60%;} .rest-frame{transform:translateX(-50%);}}
   .rest-badge{font-family:var(--font-display);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);
     background:var(--accent-dim);border-radius:6px;padding:4px 9px;}
   .segmented{display:flex;background:var(--surface2);border-radius:8px;padding:3px;gap:3px;margin-bottom:14px;}
@@ -1353,6 +1391,31 @@ function isRestDayName(name){
   return n==='rest' || n==='rest day' || n==='restday' || n==='break';
 }
 function isRestDay(day){ return !!day && isRestDayName(day.name); }
+const REST_LINES = ['Five more minutes\u2026', 'Mmf. It\u2019s a rest day. Go away.', 'I said NO REPS.', 'Okay okay\u2026 (back to sleep)'];
+let _restPokes = 0;
+function restStageHTML(){
+  const stars = [[8,14,0],[22,8,.6,1],[38,18,1.2],[60,7,.3],[74,20,1.8,1],[90,12,.9],[12,38,2.1],[88,36,1.5],[30,30,.4]].map(s=>`<i class="star${s[3]?' big':''}" style="left:${s[0]}%;top:${s[1]}%;animation-delay:${s[2]}s"></i>`).join('');
+  return `<div class="rest-stage" id="rest-stage" role="img" aria-label="A monkey sleeping soundly under the moon. Tap to poke it.">
+    ${stars}<div class="rest-moon"></div>
+    <div class="rest-bubble" id="rest-bubble"></div>
+    <div class="rest-frame"><img src="rest-monkey.jpg" alt="" decoding="async" draggable="false"></div>
+    <i class="rest-snore"></i><b class="rz z1">z</b><b class="rz z2">Z</b><b class="rz z3">Z</b><b class="rz z4">z</b>
+  </div>
+  <div class="rest-lines" aria-hidden="true"><span>Gains are loading\u2026</span><span>Muscles rebuilding. Do not disturb.</span><span>No reps. Only dreams.</span><span>Currently benching pillows.</span></div>
+  <div class="rest-meter" aria-hidden="true"><i></i></div>`;
+}
+function bindRestStage(){
+  const st = document.getElementById('rest-stage'), bub = document.getElementById('rest-bubble'); if(!st) return;
+  let t1 = null, t2 = null;
+  st.onclick = ()=>{
+    bub.textContent = REST_LINES[_restPokes % REST_LINES.length]; _restPokes++;
+    st.classList.remove('poked'); void st.offsetWidth; st.classList.add('poked'); bub.classList.add('show');
+    try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){}
+    clearTimeout(t1); clearTimeout(t2);
+    t1 = setTimeout(()=>bub.classList.remove('show'), 1900); t2 = setTimeout(()=>st.classList.remove('poked'), 700);
+  };
+}
+
 const REST_ILLUSTRATION_SVG = `<svg class="rest-art" viewBox="0 0 320 240" role="img" aria-label="Someone sleeping peacefully in bed under the moon">
   <defs>
     <linearGradient id="rest-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1E2430"/><stop offset="1" stop-color="#171B22"/></linearGradient>
@@ -2690,11 +2753,13 @@ function renderLog(){
   const restDay = isRestDay(dayById(state.logDayId));
   if(restDay){
     html += `<div class="rest-day-panel">
-      ${REST_ILLUSTRATION_SVG}
+      ${restStageHTML()}
       <h2>Rest day</h2>
       <p>Recovery is part of the program. Nothing to log today &mdash; sleep well, eat well, and come back stronger.</p>
+      <p class="rest-hint">psst&hellip; tap the monkey</p>
     </div>`;
     $main.innerHTML = html;
+    bindRestStage();
     bindLogDayChips(split);
     const dateInputR = document.getElementById('log-date-input');
     if(dateInputR) dateInputR.onchange = e=>{ state.logDate = e.target.value || todayStr(); render(); };
